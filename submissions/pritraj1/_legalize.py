@@ -138,14 +138,14 @@ def _min_displacement(
     b_ub: List[float] = []
 
     for i in range(n):
-        # t_i >= coord_i - target_i  →  coord_i - t_i <= target_i
+        # t_i >= coord_i - target_i  ->  coord_i - t_i <= target_i
         row = np.zeros(2 * n)
         row[i] = 1.0
         row[n + i] = -1.0
         A_rows.append(row)
         b_ub.append(float(target[i]))
 
-        # t_i >= target_i - coord_i  →  -coord_i - t_i <= -target_i
+        # t_i >= target_i - coord_i  ->  -coord_i - t_i <= -target_i
         row = np.zeros(2 * n)
         row[i] = -1.0
         row[n + i] = -1.0
@@ -229,7 +229,6 @@ def _find_best(
     best_dist = 1e18
     best_x = min(max(target_x, hw_i), cw - hw_i)
     best_y = min(max(target_y, hh_i), ch - hh_i)
-    found = False
 
     for c in range(num_cands):
         cx = cand_arr[c, 0]
@@ -263,9 +262,8 @@ def _find_best(
             best_dist = d
             best_x = cx
             best_y = cy
-            found = True
 
-    return np.array([best_x, best_y], dtype=np.float64), found
+    return np.array([best_x, best_y], dtype=np.float64)
 
 
 def _greedy_legalize(
@@ -324,7 +322,7 @@ def _greedy_legalize(
             [(x, y) for x in valid_x for y in valid_y], dtype=np.float64
         )
 
-        best_p, _ = _find_best(
+        best_p = _find_best(
             target_x,
             target_y,
             hw_i,

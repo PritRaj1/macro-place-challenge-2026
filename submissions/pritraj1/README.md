@@ -11,8 +11,24 @@ Two parts to the problem:
 
 Approach: constraint graph + lp
 
-We map out the hard separation constraints to a pairwise graph and use existing linear programming packages to satisfy them while minimizing displacement to a target.
+We map out the hard separation constraints to a pairwise graph and use existing linear programming packages to satisfy them while minimizing displacement to a target. Aims to preserve approximate position:
 
-## 2. Relative placement in front of legalizer
+<div align="center">
+
+<img src="../../gifs/legalize_ibm1.png" width="400">
+
+<sub><b>Legalization on IBM1, overlaps=0, positions preserved</b></sub>
+
+</div>
+
+<div align="center">
+
+<img src="../../gifs/legalize_ibm1_centered.png" width="400">
+
+<sub><b>Legalization when all overlapping (centred)</b></sub>
+
+</div>
+
+## 2. Global placer in front of legalizer
 
 ## 3. Co-optimization

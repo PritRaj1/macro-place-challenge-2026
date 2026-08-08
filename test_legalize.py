@@ -58,7 +58,7 @@ movable = bench.get_movable_mask()[:n].numpy()
 cw, ch = float(bench.canvas_width), float(bench.canvas_height)
 
 print(f"input overlaps: {count_overlaps(pos, sizes)}")
-legal = legalize_graph(pos, sizes, movable, cw, ch, gap=0.05, prefer_displacement=True)
+legal = legalize_graph(pos, sizes, movable, cw, ch, prefer_displacement=True)
 print(f"output overlaps: {count_overlaps(legal, sizes)}")
 print(f"mean displacement: {np.mean(np.linalg.norm(legal - pos, axis=1)):.4f}")
 
@@ -93,5 +93,18 @@ if (
     or not fixed_ok
 ):
     print("FAIL")
+    if not in_bounds:
+        oob_left = legal[:, 0] - half[:, 0] < -1e-6
+        oob_right = legal[:, 0] + half[:, 0] > cw + 1e-6
+        oob_bottom = legal[:, 1] - half[:, 1] < -1e-6
+        oob_top = legal[:, 1] + half[:, 1] > ch + 1e-6
+        print(
+            f"OOB Macro Indices: {np.where(oob_left | oob_right | oob_bottom | oob_top)[0]}"
+        )
+
+    if not fixed_ok:
+        fixed_indices = np.where(~movable)[0]
+        max_drift = np.max(np.abs(legal[~movable] - pos[~movable]))
+        print(f"Max fixed macro drift: {max_drift:.6f}")
 else:
     print("PASS")
