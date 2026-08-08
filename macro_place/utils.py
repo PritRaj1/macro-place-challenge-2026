@@ -116,27 +116,67 @@ def _draw_canvas(ax, benchmark):
     ax.set_ylabel("Y (μm)")
 
 
-def _draw_hard_macros(ax, placement, benchmark):
-    """Draw only hard macro outlines (no fill, no soft macros)."""
+def _draw_macros(
+    ax,
+    placement: torch.Tensor,
+    benchmark: Benchmark,
+    *,
+    hard_only: bool = False,
+    filled: bool = True,
+) -> None:
+    """
+    Draw macros onto an axes.
+
+    hard_only=Truu: only hard macros
+    filled=False: outline only no shading
+    """
     from matplotlib.patches import Rectangle
 
-    num_hard = benchmark.num_hard_macros
-    for i in range(num_hard):
+    n = benchmark.num_hard_macros if hard_only else benchmark.num_macros
+    for i in range(n):
         x, y = placement[i].tolist()
         w, h = benchmark.macro_sizes[i].tolist()
-        color = "red" if benchmark.macro_fixed[i] else "black"
-        ax.add_patch(
-            Rectangle(
-                (x - w / 2, y - h / 2),
-                w,
-                h,
-                fill=False,
-                edgecolor=color,
-                linewidth=0.8,
-                zorder=3,
-            )
-        )
+        is_soft = i >= benchmark.num_hard_macros
+        is_fixed = bool(benchmark.macro_fixed[i])
 
+        if hard_only or not filled:
+            color = "red" if is_fixed else "black"
+            ax.add_patch(
+                Rectangle(
+                    (x - w / 2, y - h / 2),
+                    w,
+                    h,
+                    fill=False,
+                    edgecolor=color,
+                    linewidth=0.8,
+                    zorder=3,
+                )
+            )
+        else:
+            if is_fixed:
+                facecolor, alpha, ls = "red", 0.35, "solid"
+            elif is_soft:
+                facecolor, alpha, ls = "lightsteelblue", 0.25, "dashed"
+            else:
+                facecolor, alpha, ls = "steelblue", 0.7, "solid"
+
+            ax.add_patch(
+                Rectangle(
+                    (x - w / 2, y - h / 2),
+                    w,
+                    h,
+                    facecolor=facecolor,
+                    edgecolor="black",
+                    alpha=alpha,
+                    linewidth=0.55,
+                    linestyle=ls,
+                    zorder=3,
+                )
+            )
+
+def _draw_hard_macros(ax, placement, benchmark):
+    """Draw only hard macro outlines (no fill, no soft macros)."""
+    _draw_macros(ax, placement, benchmark, hard_only=True, filled=False)
 
 def visualize_placement(
     placement: torch.Tensor,
@@ -319,3 +359,61 @@ def visualize_placement(
     else:
         plt.show()
     plt.close(fig)
+
+def animate_placement(
+    placements: List[torch.Tensor],
+    benchmark: Benchmark,
+    save_path: str,
+    titles: Optional[List[str]] = None,
+    fps: float = 8.0,
+    dpi: int = 110,
+) -> None:
+    """
+    Create a GIF from a sequence of placements (hard macros only).
+
+    Args:
+        placements : list of [num_macros, 2] tensors
+        benchmark  : Benchmark
+        save_path  : output .gif path
+        titles     : optional per-frame titles (defaults to "frame i")
+        fps        : frames per second
+        dpi        : rendering resolution
+    """
+    try:
+        import imageio.v2 as imageio
+        import matplotlib.pyplot as plt
+        import numpy as np
+    except ImportError as e:
+        raise ImportError(
+            "requires matplotlib and imageio.\n"
+        ) from e
+
+    if not placements:
+        raise ValueError("placements list is empty")
+    if titles is None:
+        titles = [f"frame {i}" for i in range(len(placements))]
+    if len(titles) != len(placements):
+        raise ValueError("titles and placements must have the same length")
+
+    frames = []
+    for placement, title in zip(placements, titles):
+        fig, ax = plt.subplots(1, 1, figsize=(7.5, 7.5), dpi=dpi)
+        _draw_canvas(ax, benchmark)
+        _draw_macros(ax, placement, benchmark, hard_only=True, filled=True)
+        ax.set_title(title, fontsize=11)
+        fig.tight_layout(pad=0.4)
+
+        fig.canvas.draw()
+        try:
+            buf = np.asarray(fig.canvas.renderer.buffer_rgba())
+            img = buf[:, :, :3].copy()
+        except Exception:
+            w, h = fig.canvas.get_width_height()
+            buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            img = buf.reshape(h, w, 3)
+
+        plt.close(fig)
+        frames.append(img)
+
+    imageio.mimsave(save_path, frames, duration=1.0 / fps, loop=0)
+    print(f"Saved animation to {save_path}  ({len(frames)} frames @ {fps} fps)")
