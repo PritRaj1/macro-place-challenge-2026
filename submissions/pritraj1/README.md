@@ -11,6 +11,8 @@ Two parts to the problem:
 
 Approach: constraint graph + lp
 
+We map out the hard separation constraints to a pairwise graph and use existing linear programming packages to satisfy them while minimizing displacement to a target.
+
 ## 2. Relative placement in front of legalizer
 
 ## 3. Co-optimization

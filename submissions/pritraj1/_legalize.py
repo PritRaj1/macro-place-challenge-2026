@@ -22,26 +22,52 @@ def _build_graph(
     """
     n = pos.shape[0]
     half = sizes / 2.0
+
+    # Upper triangle to avoid duplicate pairs
+    i_indices, j_indices = np.triu_indices(n, k=1)
+    dx = pos[j_indices, 0] - pos[i_indices, 0]
+    dy = pos[j_indices, 1] - pos[i_indices, 1]
+
+    sep_x = half[i_indices, 0] + half[j_indices, 0] + gap
+    sep_y = half[i_indices, 1] + half[j_indices, 1] + gap
+
+    abs_dx = np.abs(dx)
+    abs_dy = np.abs(dy)
+
+    # Overlap condition
+    overlapping = (abs_dx < sep_x) & (abs_dy < sep_y)
+
     h_edges: List[Tuple[int, int, float]] = []
     v_edges: List[Tuple[int, int, float]] = []
 
-    for i in range(n):
-        for j in range(i + 1, n):
-            dx = pos[j, 0] - pos[i, 0]
-            dy = pos[j, 1] - pos[i, 1]
-            sep_x = half[i, 0] + half[j, 0] + gap
-            sep_y = half[i, 1] + half[j, 1] + gap
+    if not np.any(overlapping):
+        return h_edges, v_edges
 
-            if abs(dx) >= abs(dy):  # Prefer axis with clearer separation
-                if dx >= 0:
-                    h_edges.append((i, j, sep_x))  # i left of j
-                else:
-                    h_edges.append((j, i, sep_x))  # j left of i
+    # Filter overlapping pairs only
+    i_overlap = i_indices[overlapping]
+    j_overlap = j_indices[overlapping]
+    dx_overlap = dx[overlapping]
+    dy_overlap = dy[overlapping]
+    sep_x_overlap = sep_x[overlapping]
+    sep_y_overlap = sep_y[overlapping]
+
+    # Add an edge if macros overlap on both axes
+    overlap_x = sep_x_overlap - abs_dx[overlapping]
+    overlap_y = sep_y_overlap - abs_dy[overlapping]
+    use_x = overlap_x <= overlap_y  # prefer axis that needs less movement to resolve
+
+    for idx in range(len(i_overlap)):
+        i, j = i_overlap[idx], j_overlap[idx]
+        if use_x[idx]:
+            if dx_overlap[idx] >= 0:
+                h_edges.append((i, j, float(sep_x_overlap[idx])))  # i left of j
             else:
-                if dy >= 0:
-                    v_edges.append((i, j, sep_y))  # i below j
-                else:
-                    v_edges.append((j, i, sep_y))  # j below i
+                h_edges.append((j, i, float(sep_x_overlap[idx])))  # j left of i
+        else:
+            if dy_overlap[idx] >= 0:
+                v_edges.append((i, j, float(sep_y_overlap[idx])))  # i below j
+            else:
+                v_edges.append((j, i, float(sep_y_overlap[idx])))  # j below i
 
     return h_edges, v_edges
 
@@ -303,6 +329,7 @@ def legalize_graph(
 
     # Fallback
     if xs is None or ys is None:
+        print("[DEBUG]: sequential fallback called")
         return _sequential(pos, sizes, movable, canvas_width, canvas_height, gap)
 
     legal = pos.copy()
