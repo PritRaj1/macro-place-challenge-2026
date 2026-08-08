@@ -24,16 +24,16 @@ def write_def(plc: PlacementCost, def_file: str, design_name: Optional[str] = No
     """
     if design_name is None:
         # Try to extract design name from plc
-        design_name = getattr(plc, 'design_name', 'design')
+        design_name = getattr(plc, "design_name", "design")
 
     # DEF database units (2000 = 1 micron)
     db_unit = 2000
 
-    with open(def_file, 'w') as fp:
+    with open(def_file, "w") as fp:
         # Header
         fp.write("VERSION 5.8 ;\n")
-        fp.write("DIVIDERCHAR \"/\" ;\n")
-        fp.write("BUSBITCHARS \"[]\" ;\n\n")
+        fp.write('DIVIDERCHAR "/" ;\n')
+        fp.write('BUSBITCHARS "[]" ;\n\n')
         fp.write(f"DESIGN {design_name} ;\n")
         fp.write(f"UNITS DISTANCE MICRONS {db_unit} ;\n\n")
 
@@ -82,9 +82,11 @@ def _write_rows(fp, plc: PlacementCost, db_unit: int):
 
     for i in range(num_rows_y):
         row_y = int(i * height_db)
-        orient = 'N' if i % 2 == 0 else 'FS'  # Alternate row orientation
-        fp.write(f"ROW ROW_{i} {site_name} 0 {row_y} {orient} "
-                 f"DO {num_sites_x} BY 1 STEP {width_db} 0 ;\n")
+        orient = "N" if i % 2 == 0 else "FS"  # Alternate row orientation
+        fp.write(
+            f"ROW ROW_{i} {site_name} 0 {row_y} {orient} "
+            f"DO {num_sites_x} BY 1 STEP {width_db} 0 ;\n"
+        )
 
     fp.write("\n")
 
@@ -110,7 +112,7 @@ def _write_components(fp, plc: PlacementCost, db_unit: int):
 
         # Get node type for ref_name
         node_type = node.get_type()
-        if node_type == 'MACRO':
+        if node_type == "MACRO":
             ref_name = name  # Use actual macro name as ref
         else:
             ref_name = "STDCELL"  # Generic for soft macros
@@ -154,7 +156,9 @@ def _write_pins(fp, plc: PlacementCost, db_unit: int):
         pin_size = int(0.05 * db_unit)  # 0.05 micron
 
         fp.write(f"  - {name} + NET {name} + DIRECTION {direction} + USE SIGNAL\n")
-        fp.write(f"      + LAYER metal1 ( -{pin_size} -{pin_size} ) ( {pin_size} {pin_size} )\n")
+        fp.write(
+            f"      + LAYER metal1 ( -{pin_size} -{pin_size} ) ( {pin_size} {pin_size} )\n"
+        )
         fp.write(f"      + FIXED ( {x_db} {y_db} ) {side} ;\n")
 
     fp.write("END PINS\n\n")
@@ -165,15 +169,15 @@ def _get_pin_side(x: float, y: float, width: float, height: float) -> str:
     threshold = 0.01  # 1% threshold
 
     if abs(x) < threshold * width:
-        return 'W'  # Left
+        return "W"  # Left
     elif abs(x - width) < threshold * width:
-        return 'E'  # Right
+        return "E"  # Right
     elif abs(y) < threshold * height:
-        return 'S'  # Bottom
+        return "S"  # Bottom
     elif abs(y - height) < threshold * height:
-        return 'N'  # Top
+        return "N"  # Top
     else:
-        return 'N'  # Default
+        return "N"  # Default
 
 
 def _write_nets(fp, plc: PlacementCost):
@@ -217,7 +221,9 @@ if __name__ == "__main__":
     from macro_place.loader import load_benchmark_from_dir
 
     # Load a benchmark
-    benchmark, plc = load_benchmark_from_dir("external/MacroPlacement/Testcases/ICCAD04/ibm01")
+    benchmark, plc = load_benchmark_from_dir(
+        "external/MacroPlacement/Testcases/ICCAD04/ibm01"
+    )
 
     # Write DEF
     write_def(plc, "ibm01_output.def", design_name="ibm01")

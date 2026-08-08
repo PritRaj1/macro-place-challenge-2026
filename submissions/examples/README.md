@@ -71,6 +71,7 @@ The `SimpleRandomPlacer` class:
 from macro_place.benchmark import Benchmark
 import torch
 
+
 class MyPlacer:
     def __init__(self, **kwargs):
         # Initialize your algorithm
@@ -112,7 +113,9 @@ from macro_place.objective import compute_proxy_cost
 from macro_place.utils import validate_placement
 
 # 1. Load benchmark
-benchmark, plc = load_benchmark_from_dir("external/MacroPlacement/Testcases/ICCAD04/ibm01")
+benchmark, plc = load_benchmark_from_dir(
+    "external/MacroPlacement/Testcases/ICCAD04/ibm01"
+)
 
 # 2. Run your placer
 placer = MyPlacer()

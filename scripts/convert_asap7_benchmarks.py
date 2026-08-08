@@ -5,13 +5,17 @@ from pathlib import Path
 
 from macro_place.loader import load_benchmark_from_dir
 
+
 def main():
     flows_dir = Path("external/MacroPlacement/Flows/ASAP7")
 
     benchmarks = {
-        'ariane136_asap7': flows_dir / "ariane136" / "netlist" / "output_CT_Grouping",
-        'nvdla_asap7': flows_dir / "nvdla" / "netlist" / "output_CT_Grouping",
-        'mempool_tile_asap7': flows_dir / "mempool_tile" / "netlist" / "output_CT_Grouping",
+        "ariane136_asap7": flows_dir / "ariane136" / "netlist" / "output_CT_Grouping",
+        "nvdla_asap7": flows_dir / "nvdla" / "netlist" / "output_CT_Grouping",
+        "mempool_tile_asap7": flows_dir
+        / "mempool_tile"
+        / "netlist"
+        / "output_CT_Grouping",
     }
 
     output_dir = Path("benchmarks/processed/public")
@@ -30,5 +34,8 @@ def main():
         except Exception as e:
             print(f"✗ {name:25} FAILED: {e}")
 
+
 if __name__ == "__main__":
-    import sys; sys.exit(main())
+    import sys
+
+    sys.exit(main())

@@ -3,9 +3,9 @@ Utility functions for placement validation and visualization.
 """
 
 import sys
+from typing import List, Optional, Tuple
 
 import torch
-from typing import Tuple, List, Optional
 
 from macro_place.benchmark import Benchmark
 
@@ -174,9 +174,11 @@ def _draw_macros(
                 )
             )
 
+
 def _draw_hard_macros(ax, placement, benchmark):
     """Draw only hard macro outlines (no fill, no soft macros)."""
     _draw_macros(ax, placement, benchmark, hard_only=True, filled=False)
+
 
 def visualize_placement(
     placement: torch.Tensor,
@@ -199,9 +201,9 @@ def visualize_placement(
     try:
         import matplotlib.pyplot as plt
         import numpy as np
-        from matplotlib.patches import Rectangle, Patch
-        from matplotlib.lines import Line2D
         from matplotlib.collections import LineCollection
+        from matplotlib.lines import Line2D
+        from matplotlib.patches import Patch, Rectangle
     except ImportError:
         print(
             "Error: matplotlib not installed. Install with: pip install matplotlib",
@@ -260,7 +262,11 @@ def visualize_placement(
         ax.scatter(
             benchmark.port_positions[:, 0].tolist(),
             benchmark.port_positions[:, 1].tolist(),
-            s=8, c="green", zorder=5, edgecolors="darkgreen", linewidths=0.3,
+            s=8,
+            c="green",
+            zorder=5,
+            edgecolors="darkgreen",
+            linewidths=0.3,
         )
 
     # Net connections
@@ -287,19 +293,42 @@ def visualize_placement(
                 lines.append([(avg_x, avg_y), (cx, cy)])
         if lines:
             ax.add_collection(
-                LineCollection(lines, colors="gray", alpha=0.05, linewidths=0.5, zorder=1)
+                LineCollection(
+                    lines, colors="gray", alpha=0.05, linewidths=0.5, zorder=1
+                )
             )
 
     ax.set_title(f"{benchmark.name} — Placement")
     legend_elements = [
         Patch(facecolor="blue", alpha=0.5, edgecolor="black", label="Hard macros"),
-        Patch(facecolor="lightsteelblue", alpha=0.1, edgecolor="black",
-              linestyle="dashed", label="Soft macros"),
+        Patch(
+            facecolor="lightsteelblue",
+            alpha=0.1,
+            edgecolor="black",
+            linestyle="dashed",
+            label="Soft macros",
+        ),
         Patch(facecolor="red", alpha=0.3, edgecolor="black", label="Fixed macros"),
-        Line2D([0], [0], marker="o", color="w", markerfacecolor="darkslateblue",
-               markeredgecolor="darkslateblue", markersize=5, label="Macro pins"),
-        Line2D([0], [0], marker="o", color="w", markerfacecolor="green",
-               markeredgecolor="darkgreen", markersize=6, label="I/O pins"),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor="darkslateblue",
+            markeredgecolor="darkslateblue",
+            markersize=5,
+            label="Macro pins",
+        ),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            markerfacecolor="green",
+            markeredgecolor="darkgreen",
+            markersize=6,
+            label="I/O pins",
+        ),
     ]
     legend = ax.legend(handles=legend_elements, loc="upper right", fontsize=8)
     legend.set_zorder(10)
@@ -319,8 +348,15 @@ def visualize_placement(
         dens = np.asarray(plc.grid_cells, dtype=float).reshape(nrow, ncol)
         vmax = max(float(np.max(dens)), 1e-9)
         im_dens = ax.imshow(
-            dens, origin="lower", extent=extent, aspect="equal",
-            cmap="Blues", alpha=0.6, vmin=0.0, vmax=vmax, zorder=0,
+            dens,
+            origin="lower",
+            extent=extent,
+            aspect="equal",
+            cmap="Blues",
+            alpha=0.6,
+            vmin=0.0,
+            vmax=vmax,
+            zorder=0,
             interpolation="nearest",
         )
         fig.colorbar(im_dens, ax=ax, fraction=0.046, pad=0.04, label="Density")
@@ -342,11 +378,20 @@ def visualize_placement(
         vmax = float(np.percentile(pos, 99)) if pos.size else 1.0
         vmax = max(vmax, 1e-9)
         im_cong = ax.imshow(
-            cong, origin="lower", extent=extent, aspect="equal",
-            cmap="hot", alpha=0.6, vmin=0.0, vmax=vmax, zorder=0,
+            cong,
+            origin="lower",
+            extent=extent,
+            aspect="equal",
+            cmap="hot",
+            alpha=0.6,
+            vmin=0.0,
+            vmax=vmax,
+            zorder=0,
             interpolation="nearest",
         )
-        fig.colorbar(im_cong, ax=ax, fraction=0.046, pad=0.04, label="Congestion (max H/V)")
+        fig.colorbar(
+            im_cong, ax=ax, fraction=0.046, pad=0.04, label="Congestion (max H/V)"
+        )
 
     _draw_hard_macros(ax, placement, benchmark)
     ax.set_title(f"{benchmark.name} — Congestion")
@@ -359,6 +404,7 @@ def visualize_placement(
     else:
         plt.show()
     plt.close(fig)
+
 
 def animate_placement(
     placements: List[torch.Tensor],
@@ -384,9 +430,7 @@ def animate_placement(
         import matplotlib.pyplot as plt
         import numpy as np
     except ImportError as e:
-        raise ImportError(
-            "requires matplotlib and imageio.\n"
-        ) from e
+        raise ImportError("requires matplotlib and imageio.\n") from e
 
     if not placements:
         raise ValueError("placements list is empty")

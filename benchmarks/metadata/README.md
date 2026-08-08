@@ -54,11 +54,11 @@ Contains initial placement baseline scores for all competition benchmarks.
 import json
 
 # Load baseline scores
-with open('benchmarks/metadata/baseline_scores.json') as f:
+with open("benchmarks/metadata/baseline_scores.json") as f:
     baselines = json.load(f)
 
 # Get baseline for a specific benchmark
-ariane133_baseline = baselines['ariane133']['initial_placement']['proxy_cost']
+ariane133_baseline = baselines["ariane133"]["initial_placement"]["proxy_cost"]
 print(f"Ariane133 baseline: {ariane133_baseline:.4f}")
 ```
 

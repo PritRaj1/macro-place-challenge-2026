@@ -33,7 +33,7 @@ All benchmarks are modern chip designs in NanGate45 technology (45nm):
 from benchmark import Benchmark
 
 # Load a benchmark
-benchmark = Benchmark.load('benchmarks/processed/public/ariane133_ng45.pt')
+benchmark = Benchmark.load("benchmarks/processed/public/ariane133_ng45.pt")
 
 print(f"Design: {benchmark.name}")
 print(f"Macros: {benchmark.num_macros}")

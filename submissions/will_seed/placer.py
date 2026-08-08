@@ -11,26 +11,41 @@ Usage:
     uv run evaluate submissions/will_seed/placer.py --all
 """
 
-import sys, io, math, random
-import torch
-import numpy as np
+import math
+import random
 from pathlib import Path
+
+import numpy as np
+import torch
+
 from macro_place.benchmark import Benchmark
 
 
 def _load_plc(name):
-    from macro_place.loader import load_benchmark_from_dir, load_benchmark
+    from macro_place.loader import load_benchmark, load_benchmark_from_dir
+
     root = Path("external/MacroPlacement/Testcases/ICCAD04") / name
     if root.exists():
         _, plc = load_benchmark_from_dir(str(root))
         return plc
-    ng45 = {"ariane133_ng45": "ariane133", "ariane136_ng45": "ariane136",
-            "nvdla_ng45": "nvdla", "mempool_tile_ng45": "mempool_tile"}
+    ng45 = {
+        "ariane133_ng45": "ariane133",
+        "ariane136_ng45": "ariane136",
+        "nvdla_ng45": "nvdla",
+        "mempool_tile_ng45": "mempool_tile",
+    }
     d = ng45.get(name)
     if d:
-        base = Path("external/MacroPlacement/Flows/NanGate45") / d / "netlist" / "output_CT_Grouping"
+        base = (
+            Path("external/MacroPlacement/Flows/NanGate45")
+            / d
+            / "netlist"
+            / "output_CT_Grouping"
+        )
         if (base / "netlist.pb.txt").exists():
-            _, plc = load_benchmark(str(base / "netlist.pb.txt"), str(base / "initial.plc"))
+            _, plc = load_benchmark(
+                str(base / "netlist.pb.txt"), str(base / "initial.plc")
+            )
             return plc
     return None
 
@@ -56,8 +71,10 @@ def _extract_edges(benchmark, plc):
                     edge_dict[pair] = edge_dict.get(pair, 0) + w
     if not edge_dict:
         return torch.zeros(0, 2, dtype=torch.long), torch.zeros(0)
-    return (torch.tensor(list(edge_dict.keys()), dtype=torch.long),
-            torch.tensor([edge_dict[e] for e in edge_dict], dtype=torch.float32))
+    return (
+        torch.tensor(list(edge_dict.keys()), dtype=torch.long),
+        torch.tensor([edge_dict[e] for e in edge_dict], dtype=torch.float32),
+    )
 
 
 class WillSeedPlacer:
@@ -91,8 +108,20 @@ class WillSeedPlacer:
 
         # Step 2: SA refinement with overlap rejection (fast numpy)
         if len(edges) > 0:
-            pos = self._sa_refine(pos, edges.numpy(), edge_weights.numpy(),
-                                   movable, sizes_np, half_w, half_h, cw, ch, n_hard, plc, benchmark)
+            pos = self._sa_refine(
+                pos,
+                edges.numpy(),
+                edge_weights.numpy(),
+                movable,
+                sizes_np,
+                half_w,
+                half_h,
+                cw,
+                ch,
+                n_hard,
+                plc,
+                benchmark,
+            )
 
         # Step 3: Build full placement + soft macro FD
         full_pos = benchmark.macro_positions.clone()
@@ -103,7 +132,21 @@ class WillSeedPlacer:
 
         return full_pos
 
-    def _sa_refine(self, pos, edges, edge_weights, movable, sizes, half_w, half_h, cw, ch, n, plc, benchmark):
+    def _sa_refine(
+        self,
+        pos,
+        edges,
+        edge_weights,
+        movable,
+        sizes,
+        half_w,
+        half_h,
+        cw,
+        ch,
+        n,
+        plc,
+        benchmark,
+    ):
         """SA with single-macro overlap check (O(N) per move, not O(N^2))."""
         movable_idx = np.where(movable)[0]
         if len(movable_idx) == 0:
@@ -151,8 +194,12 @@ class WillSeedPlacer:
             if move < 0.5:
                 # SHIFT
                 shift = T * (0.3 + 0.7 * (1 - frac))
-                pos[i, 0] = np.clip(pos[i, 0] + random.gauss(0, shift), half_w[i], cw - half_w[i])
-                pos[i, 1] = np.clip(pos[i, 1] + random.gauss(0, shift), half_h[i], ch - half_h[i])
+                pos[i, 0] = np.clip(
+                    pos[i, 0] + random.gauss(0, shift), half_w[i], cw - half_w[i]
+                )
+                pos[i, 1] = np.clip(
+                    pos[i, 1] + random.gauss(0, shift), half_h[i], ch - half_h[i]
+                )
             elif move < 0.8:
                 # SWAP
                 if neighbors[i] and random.random() < 0.7:
@@ -168,30 +215,44 @@ class WillSeedPlacer:
                     pos[j, 1] = np.clip(old_y, half_h[j], ch - half_h[j])
                     # Check both macros
                     if check_single_overlap(i) or check_single_overlap(j):
-                        pos[i, 0] = old_x; pos[i, 1] = old_y
-                        pos[j, 0] = old_jx; pos[j, 1] = old_jy
+                        pos[i, 0] = old_x
+                        pos[i, 1] = old_y
+                        pos[j, 0] = old_jx
+                        pos[j, 1] = old_jy
                         continue
                     new_cost = wl_cost()
                     delta = new_cost - current_cost
                     if delta < 0 or random.random() < math.exp(-delta / max(T, 1e-10)):
                         current_cost = new_cost
                         if current_cost < best_cost:
-                            best_cost = current_cost; best_pos = pos.copy()
+                            best_cost = current_cost
+                            best_pos = pos.copy()
                     else:
-                        pos[i, 0] = old_x; pos[i, 1] = old_y
-                        pos[j, 0] = old_jx; pos[j, 1] = old_jy
+                        pos[i, 0] = old_x
+                        pos[i, 1] = old_y
+                        pos[j, 0] = old_jx
+                        pos[j, 1] = old_jy
                     continue
             else:
                 # MOVE TOWARD NEIGHBOR
                 if neighbors[i]:
                     j = random.choice(neighbors[i])
                     alpha = random.uniform(0.05, 0.3)
-                    pos[i, 0] = np.clip(pos[i, 0]+alpha*(pos[j, 0]-pos[i, 0]), half_w[i], cw-half_w[i])
-                    pos[i, 1] = np.clip(pos[i, 1]+alpha*(pos[j, 1]-pos[i, 1]), half_h[i], ch-half_h[i])
+                    pos[i, 0] = np.clip(
+                        pos[i, 0] + alpha * (pos[j, 0] - pos[i, 0]),
+                        half_w[i],
+                        cw - half_w[i],
+                    )
+                    pos[i, 1] = np.clip(
+                        pos[i, 1] + alpha * (pos[j, 1] - pos[i, 1]),
+                        half_h[i],
+                        ch - half_h[i],
+                    )
 
             # Single macro overlap check - O(N)
             if check_single_overlap(i):
-                pos[i, 0] = old_x; pos[i, 1] = old_y
+                pos[i, 0] = old_x
+                pos[i, 1] = old_y
                 continue
 
             new_cost = wl_cost()
@@ -199,9 +260,11 @@ class WillSeedPlacer:
             if delta < 0 or random.random() < math.exp(-delta / max(T, 1e-10)):
                 current_cost = new_cost
                 if current_cost < best_cost:
-                    best_cost = current_cost; best_pos = pos.copy()
+                    best_cost = current_cost
+                    best_pos = pos.copy()
             else:
-                pos[i, 0] = old_x; pos[i, 1] = old_y
+                pos[i, 0] = old_x
+                pos[i, 1] = old_y
 
         return best_pos
 
@@ -213,31 +276,49 @@ class WillSeedPlacer:
         legal = pos.copy()
         for idx in order:
             if not movable[idx]:
-                placed[idx] = True; continue
+                placed[idx] = True
+                continue
             if placed.any():
                 dx = np.abs(legal[idx, 0] - legal[:, 0])
                 dy = np.abs(legal[idx, 1] - legal[:, 1])
-                c = (dx < sep_x[idx]+0.05) & (dy < sep_y[idx]+0.05) & placed
+                c = (dx < sep_x[idx] + 0.05) & (dy < sep_y[idx] + 0.05) & placed
                 c[idx] = False
                 if not c.any():
-                    placed[idx] = True; continue
+                    placed[idx] = True
+                    continue
             step = max(sizes[idx, 0], sizes[idx, 1]) * 0.25
-            best_p = legal[idx].copy(); best_d = float('inf')
+            best_p = legal[idx].copy()
+            best_d = float("inf")
             for r in range(1, 150):
                 found = False
-                for dxm in range(-r, r+1):
-                    for dym in range(-r, r+1):
-                        if abs(dxm) != r and abs(dym) != r: continue
-                        cx = np.clip(pos[idx, 0]+dxm*step, half_w[idx], cw-half_w[idx])
-                        cy = np.clip(pos[idx, 1]+dym*step, half_h[idx], ch-half_h[idx])
+                for dxm in range(-r, r + 1):
+                    for dym in range(-r, r + 1):
+                        if abs(dxm) != r and abs(dym) != r:
+                            continue
+                        cx = np.clip(
+                            pos[idx, 0] + dxm * step, half_w[idx], cw - half_w[idx]
+                        )
+                        cy = np.clip(
+                            pos[idx, 1] + dym * step, half_h[idx], ch - half_h[idx]
+                        )
                         if placed.any():
-                            dx = np.abs(cx-legal[:, 0]); dy = np.abs(cy-legal[:, 1])
-                            c = (dx < sep_x[idx]+0.05) & (dy < sep_y[idx]+0.05) & placed
+                            dx = np.abs(cx - legal[:, 0])
+                            dy = np.abs(cy - legal[:, 1])
+                            c = (
+                                (dx < sep_x[idx] + 0.05)
+                                & (dy < sep_y[idx] + 0.05)
+                                & placed
+                            )
                             c[idx] = False
-                            if c.any(): continue
-                        d = (cx-pos[idx, 0])**2+(cy-pos[idx, 1])**2
+                            if c.any():
+                                continue
+                        d = (cx - pos[idx, 0]) ** 2 + (cy - pos[idx, 1]) ** 2
                         if d < best_d:
-                            best_d = d; best_p = np.array([cx, cy]); found = True
-                if found: break
-            legal[idx] = best_p; placed[idx] = True
+                            best_d = d
+                            best_p = np.array([cx, cy])
+                            found = True
+                if found:
+                    break
+            legal[idx] = best_p
+            placed[idx] = True
         return legal

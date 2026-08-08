@@ -5,13 +5,13 @@ Wraps PlacementCost methods to compute wirelength, density, and congestion costs
 Also computes overlap metrics for validation and analysis.
 """
 
-import torch
 import math
 from typing import Dict, Optional
 
+import torch
+
 from macro_place._plc import PlacementCost
 from macro_place.benchmark import Benchmark
-
 
 # Monkey-patch PlacementCost to fix boundary bug in __get_grid_cell_location
 _original_get_grid_cell_location = PlacementCost._PlacementCost__get_grid_cell_location
@@ -76,7 +76,7 @@ def compute_overlap_metrics(
     macros_with_overlaps = set()
 
     # Check hard macro pairs only for overlap (soft macros naturally overlap)
-    num_hard = getattr(benchmark, 'num_hard_macros', num_macros)
+    num_hard = getattr(benchmark, "num_hard_macros", num_macros)
     for i in range(num_hard):
         for j in range(i + 1, num_hard):
             # Calculate center-to-center distances
@@ -187,10 +187,10 @@ def _set_placement(plc: PlacementCost, placement: torch.Tensor, benchmark: Bench
     placement_np = placement.cpu().numpy()
 
     # Build macro_name -> [pin_indices] lookup (cached on plc)
-    if not hasattr(plc, '_macro_pin_map'):
+    if not hasattr(plc, "_macro_pin_map"):
         pin_map = {}
         for idx, mod in enumerate(plc.modules_w_pins):
-            if mod.get_type() == 'MACRO_PIN' and hasattr(mod, 'get_macro_name'):
+            if mod.get_type() == "MACRO_PIN" and hasattr(mod, "get_macro_name"):
                 name = mod.get_macro_name()
                 if name not in pin_map:
                     pin_map[name] = []

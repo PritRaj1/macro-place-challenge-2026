@@ -6,6 +6,7 @@ Pure PyTorch tensor representation of placement benchmarks.
 
 from dataclasses import dataclass, field
 from typing import List
+
 import torch
 
 
@@ -47,7 +48,9 @@ class Benchmark:
     grid_cols: int
 
     # I/O ports (pins on the chip boundary)
-    port_positions: torch.Tensor = field(default_factory=lambda: torch.zeros(0, 2))  # [num_ports, 2]
+    port_positions: torch.Tensor = field(
+        default_factory=lambda: torch.zeros(0, 2)
+    )  # [num_ports, 2]
 
     # Hard macro pin offsets (relative to macro center)
     # List of [num_pins_i, 2] tensors, one per hard macro (indices [0, num_hard_macros))

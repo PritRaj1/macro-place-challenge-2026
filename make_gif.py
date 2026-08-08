@@ -1,8 +1,9 @@
-import sys
-import torch
-import numpy as np
 import importlib.util
+import sys
 from pathlib import Path
+
+import numpy as np
+import torch
 
 from macro_place.loader import load_benchmark_from_dir
 from macro_place.utils import animate_placement
@@ -46,16 +47,38 @@ def record(placer, benchmark):
         titles.append("After legalization")
         return pos
 
-    def sa_hook(pos, edges, edge_weights, movable, sizes, half_w, half_h,
-                cw, ch, n, plc, benchmark):
+    def sa_hook(
+        pos,
+        edges,
+        edge_weights,
+        movable,
+        sizes,
+        half_w,
+        half_h,
+        cw,
+        ch,
+        n,
+        plc,
+        benchmark,
+    ):
         full = benchmark.macro_positions.clone()
         full[:n_hard] = torch.from_numpy(pos.astype(np.float32))
         frames.append(full.clone())
         titles.append("Start of SA")
 
         final_pos = original_sa(
-            pos, edges, edge_weights, movable, sizes,
-            half_w, half_h, cw, ch, n, plc, benchmark
+            pos,
+            edges,
+            edge_weights,
+            movable,
+            sizes,
+            half_w,
+            half_h,
+            cw,
+            ch,
+            n,
+            plc,
+            benchmark,
         )
 
         full = benchmark.macro_positions.clone()

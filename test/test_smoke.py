@@ -1,14 +1,14 @@
 """Smoke tests to verify the competition infrastructure works end-to-end."""
 
-import torch
-import pytest
 from pathlib import Path
+
+import pytest
+import torch
 
 from macro_place.benchmark import Benchmark
 from macro_place.loader import load_benchmark_from_dir
 from macro_place.objective import compute_proxy_cost
 from macro_place.utils import validate_placement
-
 
 TESTCASE_ROOT = Path("external/MacroPlacement/Testcases/ICCAD04")
 
@@ -63,7 +63,6 @@ def test_validate_placement(ibm01):
 
 def test_net_pin_nodes(ibm01):
     """Loader exposes pin-level net connectivity consistent with net_nodes."""
-    import torch
 
     benchmark, _ = ibm01
     assert len(benchmark.net_pin_nodes) == benchmark.num_nets
@@ -98,7 +97,6 @@ def test_net_pin_nodes(ibm01):
 
 def test_benchmark_save_load_roundtrip(ibm01, tmp_path):
     """Benchmark.save/load preserves net_pin_nodes."""
-    import torch
 
     benchmark, _ = ibm01
     out = tmp_path / "roundtrip.pt"
@@ -123,7 +121,8 @@ def test_greedy_row_placer(ibm01):
 
     benchmark, plc = ibm01
     placer_cls = next(
-        cls for name, cls in vars(mod).items()
+        cls
+        for name, cls in vars(mod).items()
         if isinstance(cls, type) and hasattr(cls, "place")
     )
     placer = placer_cls()
@@ -131,4 +130,6 @@ def test_greedy_row_placer(ibm01):
 
     assert placement.shape == (benchmark.num_macros, 2)
     costs = compute_proxy_cost(placement, benchmark, plc)
-    assert costs["overlap_count"] == 0, f"Greedy placer has {costs['overlap_count']} overlaps"
+    assert costs["overlap_count"] == 0, (
+        f"Greedy placer has {costs['overlap_count']} overlaps"
+    )

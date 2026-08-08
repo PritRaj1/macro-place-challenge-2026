@@ -5,8 +5,9 @@ Leverages the existing MacroPlacement parser instead of reimplementing.
 """
 
 import os
-import torch
 from typing import Optional, Tuple
+
+import torch
 
 from macro_place._plc import PlacementCost
 from macro_place.benchmark import Benchmark
@@ -93,8 +94,8 @@ def load_benchmark(
     # Also build pin_slot: full pin name ("MACRO/PIN") -> (macro_name, slot_in_macro)
     # so we can map net membership to specific pin offsets (needed for pin-level HPWL).
     macro_pin_offsets = []
-    pin_map = {}          # macro_name -> list of [x_offset, y_offset]
-    pin_slot = {}         # "MACRO/PIN" -> (macro_name, slot index into pin_map[macro_name])
+    pin_map = {}  # macro_name -> list of [x_offset, y_offset]
+    pin_slot = {}  # "MACRO/PIN" -> (macro_name, slot index into pin_map[macro_name])
     for idx in plc.hard_macro_pin_indices:
         pin = plc.modules_w_pins[idx]
         pin_macro = pin.get_macro_name() if hasattr(pin, "get_macro_name") else None
@@ -174,7 +175,11 @@ def load_benchmark(
             net_weights_list.append(1.0)
 
     num_nets = len(net_nodes)
-    net_weights_tensor = torch.tensor(net_weights_list, dtype=torch.float32) if net_weights_list else torch.zeros(0, dtype=torch.float32)
+    net_weights_tensor = (
+        torch.tensor(net_weights_list, dtype=torch.float32)
+        if net_weights_list
+        else torch.zeros(0, dtype=torch.float32)
+    )
 
     # Create Benchmark object
     benchmark = Benchmark(

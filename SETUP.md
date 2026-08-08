@@ -41,7 +41,9 @@ uv sync
 ```python
 from macro_place.loader import load_benchmark_from_dir
 
-benchmark, plc = load_benchmark_from_dir('external/MacroPlacement/Testcases/ICCAD04/ibm01')
+benchmark, plc = load_benchmark_from_dir(
+    "external/MacroPlacement/Testcases/ICCAD04/ibm01"
+)
 ```
 
 Returns:
@@ -117,7 +119,7 @@ Checks:
 ```python
 from macro_place.utils import visualize_placement
 
-visualize_placement(placement, benchmark, save_path='output.png')
+visualize_placement(placement, benchmark, save_path="output.png")
 ```
 
 ## Writing a Placer
@@ -129,6 +131,7 @@ Your placer takes a `Benchmark` and returns a `[num_macros, 2]` tensor of positi
 ```python
 import torch
 from macro_place.benchmark import Benchmark
+
 
 class MyPlacer:
     def place(self, benchmark: Benchmark) -> torch.Tensor:
@@ -183,10 +186,14 @@ Soft macros (standard cell clusters) are connected to hard macros via nets. When
 # After setting hard macro positions, reoptimize soft macros:
 canvas_size = max(benchmark.canvas_width, benchmark.canvas_height)
 plc.optimize_stdcells(
-    use_current_loc=False, move_stdcells=True, move_macros=False,
-    log_scale_conns=False, use_sizes=False, io_factor=1.0,
+    use_current_loc=False,
+    move_stdcells=True,
+    move_macros=False,
+    log_scale_conns=False,
+    use_sizes=False,
+    io_factor=1.0,
     num_steps=[100, 100, 100],
-    max_move_distance=[canvas_size/100]*3,
+    max_move_distance=[canvas_size / 100] * 3,
     attract_factor=[100, 1.0e-3, 1.0e-5],
     repel_factor=[0, 1.0e6, 1.0e7],
 )
@@ -215,12 +222,29 @@ from macro_place.loader import load_benchmark_from_dir
 from macro_place.objective import compute_proxy_cost
 
 BENCHMARKS = [
-    "ibm01", "ibm02", "ibm03", "ibm04", "ibm06", "ibm07", "ibm08", "ibm09",
-    "ibm10", "ibm11", "ibm12", "ibm13", "ibm14", "ibm15", "ibm16", "ibm17", "ibm18",
+    "ibm01",
+    "ibm02",
+    "ibm03",
+    "ibm04",
+    "ibm06",
+    "ibm07",
+    "ibm08",
+    "ibm09",
+    "ibm10",
+    "ibm11",
+    "ibm12",
+    "ibm13",
+    "ibm14",
+    "ibm15",
+    "ibm16",
+    "ibm17",
+    "ibm18",
 ]
 
 for name in BENCHMARKS:
-    benchmark, plc = load_benchmark_from_dir(f'external/MacroPlacement/Testcases/ICCAD04/{name}')
+    benchmark, plc = load_benchmark_from_dir(
+        f"external/MacroPlacement/Testcases/ICCAD04/{name}"
+    )
     placement = my_placer.place(benchmark)
     costs = compute_proxy_cost(placement, benchmark, plc)
     print(f"{name}: proxy={costs['proxy_cost']:.4f}  overlaps={costs['overlap_count']}")
@@ -243,7 +267,7 @@ Pre-processed `.pt` versions are available in `benchmarks/processed/public/` for
 ```python
 from macro_place.benchmark import Benchmark
 
-benchmark = Benchmark.load('benchmarks/processed/public/ariane133_ng45_random.pt')
+benchmark = Benchmark.load("benchmarks/processed/public/ariane133_ng45_random.pt")
 ```
 
 The OpenROAD flow evaluation measures WNS (worst negative slack), TNS (total negative slack), and Area. Participants do not need to run OpenROAD themselves — the judges will run it on top submissions.

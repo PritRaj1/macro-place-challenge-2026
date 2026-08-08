@@ -12,6 +12,7 @@ from pathlib import Path
 
 from macro_place.loader import load_benchmark_from_dir
 
+
 def main():
     # Path to IBM benchmarks in MacroPlacement
     testcases_dir = Path("external/MacroPlacement/Testcases/ICCAD04")
@@ -22,7 +23,10 @@ def main():
         return 1
 
     # IBM benchmarks to convert
-    ibm_benchmarks = [f"ibm{i:02d}" for i in [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]]
+    ibm_benchmarks = [
+        f"ibm{i:02d}"
+        for i in [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+    ]
 
     # Output directory
     output_dir = Path("benchmarks/processed/public")
@@ -59,6 +63,7 @@ def main():
         except Exception as e:
             print(f"✗ Error: {e}")
             import traceback
+
             traceback.print_exc()
 
     print()
@@ -77,4 +82,5 @@ def main():
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(main())

@@ -13,13 +13,14 @@ Usage:
     python scripts/evaluate_shelfpack.py --all --run-orfs
 """
 
-import os
-import sys
-import shutil
 import argparse
+import os
+import shutil
 import subprocess
-import torch
+import sys
 from pathlib import Path
+
+import torch
 
 from macro_place.benchmark import Benchmark
 from macro_place.loader import load_benchmark_from_dir
@@ -89,17 +90,17 @@ class ShelfPackPlacer:
 
 # Map benchmark names to source directories for loading plc
 SOURCE_DIRS = {
-    'ariane133_ng45': 'external/MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping',
-    'ariane136_ng45': 'external/MacroPlacement/Flows/NanGate45/ariane136/netlist/output_CT_Grouping',
-    'nvdla_ng45': 'external/MacroPlacement/Flows/NanGate45/nvdla/netlist/output_CT_Grouping',
-    'mempool_tile_ng45': 'external/MacroPlacement/Flows/NanGate45/mempool_tile/netlist/output_CT_Grouping',
+    "ariane133_ng45": "external/MacroPlacement/Flows/NanGate45/ariane133/netlist/output_CT_Grouping",
+    "ariane136_ng45": "external/MacroPlacement/Flows/NanGate45/ariane136/netlist/output_CT_Grouping",
+    "nvdla_ng45": "external/MacroPlacement/Flows/NanGate45/nvdla/netlist/output_CT_Grouping",
+    "mempool_tile_ng45": "external/MacroPlacement/Flows/NanGate45/mempool_tile/netlist/output_CT_Grouping",
 }
 
 
 def evaluate_one(benchmark_name: str, run_orfs: bool = False):
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  {benchmark_name}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Load benchmark
     pt_file = Path(f"benchmarks/processed/public/{benchmark_name}.pt")
@@ -108,12 +109,16 @@ def evaluate_one(benchmark_name: str, run_orfs: bool = False):
         return
 
     benchmark = Benchmark.load(str(pt_file))
-    print(f"  Loaded: {benchmark.num_macros} macros, canvas {benchmark.canvas_width:.1f}x{benchmark.canvas_height:.1f}")
+    print(
+        f"  Loaded: {benchmark.num_macros} macros, canvas {benchmark.canvas_width:.1f}x{benchmark.canvas_height:.1f}"
+    )
 
     # Load PlacementCost for proxy cost computation
     source_dir = SOURCE_DIRS.get(benchmark_name)
     if not source_dir or not Path(source_dir).exists():
-        print(f"  WARNING: Source dir not found for {benchmark_name}, skipping proxy cost")
+        print(
+            f"  WARNING: Source dir not found for {benchmark_name}, skipping proxy cost"
+        )
         plc = None
     else:
         _, plc = load_benchmark_from_dir(source_dir)
@@ -123,18 +128,40 @@ def evaluate_one(benchmark_name: str, run_orfs: bool = False):
     # Halos must be >= ORFS MACRO_PLACE_HALO (22.4x15.12 for NG45) plus extra
     # margin for PDN power stripe channels between macro rows.
     ORFS_CONFIGS = {
-        'ariane133_ng45': {'core_w': 2052.0, 'core_h': 2100.0, 'halo_x': 30.0, 'halo_y': 30.0},
-        'ariane136_ng45': {'core_w': 2052.0, 'core_h': 2100.0, 'halo_x': 15.0, 'halo_y': 15.0},
-        'nvdla_ng45':     {'core_w': 2052.0, 'core_h': 2100.0, 'halo_x': 30.0, 'halo_y': 30.0},
-        'mempool_tile_ng45': {'core_w': 1990.0, 'core_h': 1990.0, 'halo_x': 30.0, 'halo_y': 30.0},
+        "ariane133_ng45": {
+            "core_w": 2052.0,
+            "core_h": 2100.0,
+            "halo_x": 30.0,
+            "halo_y": 30.0,
+        },
+        "ariane136_ng45": {
+            "core_w": 2052.0,
+            "core_h": 2100.0,
+            "halo_x": 15.0,
+            "halo_y": 15.0,
+        },
+        "nvdla_ng45": {
+            "core_w": 2052.0,
+            "core_h": 2100.0,
+            "halo_x": 30.0,
+            "halo_y": 30.0,
+        },
+        "mempool_tile_ng45": {
+            "core_w": 1990.0,
+            "core_h": 1990.0,
+            "halo_x": 30.0,
+            "halo_y": 30.0,
+        },
     }
 
     canvas_override = None
     if run_orfs and benchmark_name in ORFS_CONFIGS:
         cfg = ORFS_CONFIGS[benchmark_name]
-        placer = ShelfPackPlacer(halo_x=cfg['halo_x'], halo_y=cfg['halo_y'])
-        canvas_override = (cfg['core_w'], cfg['core_h'])
-        print(f"  Using ORFS core area: {cfg['core_w']}x{cfg['core_h']}, halo: {cfg['halo_x']}x{cfg['halo_y']}")
+        placer = ShelfPackPlacer(halo_x=cfg["halo_x"], halo_y=cfg["halo_y"])
+        canvas_override = (cfg["core_w"], cfg["core_h"])
+        print(
+            f"  Using ORFS core area: {cfg['core_w']}x{cfg['core_h']}, halo: {cfg['halo_x']}x{cfg['halo_y']}"
+        )
     else:
         placer = ShelfPackPlacer()
     placement = placer.place(benchmark, canvas_override=canvas_override)
@@ -146,7 +173,9 @@ def evaluate_one(benchmark_name: str, run_orfs: bool = False):
     # Proxy cost
     if plc is not None:
         costs = compute_proxy_cost(placement, benchmark, plc)
-        print(f"  Proxy cost: {costs['proxy_cost']:.4f}  (WL={costs['wirelength_cost']:.4f}, D={costs['density_cost']:.4f}, C={costs['congestion_cost']:.4f})")
+        print(
+            f"  Proxy cost: {costs['proxy_cost']:.4f}  (WL={costs['wirelength_cost']:.4f}, D={costs['density_cost']:.4f}, C={costs['congestion_cost']:.4f})"
+        )
         print(f"  Overlaps: {costs['overlap_count']}")
 
     # Save placement tensor
@@ -158,13 +187,17 @@ def evaluate_one(benchmark_name: str, run_orfs: bool = False):
 
     # Run ORFS if requested
     if run_orfs:
-        print(f"\n  Running ORFS evaluation...")
+        print("\n  Running ORFS evaluation...")
         cmd = [
-            sys.executable, "scripts/evaluate_with_orfs.py",
-            "--benchmark", benchmark_name,
-            "--placement", str(placement_file),
+            sys.executable,
+            "scripts/evaluate_with_orfs.py",
+            "--benchmark",
+            benchmark_name,
+            "--placement",
+            str(placement_file),
             "--no-docker",
-            "--output", "output/shelfpack_orfs",
+            "--output",
+            "output/shelfpack_orfs",
         ]
         # Ensure system yosys/openroad are found by ORFS make
         env = dict(os.environ)
@@ -177,9 +210,9 @@ def evaluate_one(benchmark_name: str, run_orfs: bool = False):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--benchmark', type=str, help='Single benchmark name')
-    parser.add_argument('--all', action='store_true', help='All NG45 benchmarks')
-    parser.add_argument('--run-orfs', action='store_true', help='Run full ORFS flow')
+    parser.add_argument("--benchmark", type=str, help="Single benchmark name")
+    parser.add_argument("--all", action="store_true", help="All NG45 benchmarks")
+    parser.add_argument("--run-orfs", action="store_true", help="Run full ORFS flow")
     args = parser.parse_args()
 
     if args.all:

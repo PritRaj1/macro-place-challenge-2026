@@ -1,13 +1,14 @@
 """Generate ORFS design configurations from our benchmarks."""
 
-from pathlib import Path
-from dataclasses import dataclass
 import shutil
+from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass
 class ORFSDesign:
     """ORFS design configuration."""
+
     name: str
     tech: str  # "nangate45" or "asap7"
     verilog_files: list
@@ -18,9 +19,7 @@ class ORFSDesign:
 
 
 def create_orfs_design(
-    design: ORFSDesign,
-    orfs_root: Path,
-    source_dir: Path = None
+    design: ORFSDesign, orfs_root: Path, source_dir: Path = None
 ) -> Path:
     """
     Create ORFS design directory.
@@ -47,7 +46,10 @@ def create_orfs_design(
     # DESIGN_HOME resolves to the designs/ root directory
     # So we need the full path: $(DESIGN_HOME)/$(PLATFORM)/$(DESIGN_NICKNAME)/file
     # DESIGN_NAME must match the top-level Verilog module name
-    verilog_names = ' '.join(f"$(DESIGN_HOME)/$(PLATFORM)/$(DESIGN_NICKNAME)/{Path(v).name}" for v in design.verilog_files)
+    verilog_names = " ".join(
+        f"$(DESIGN_HOME)/$(PLATFORM)/$(DESIGN_NICKNAME)/{Path(v).name}"
+        for v in design.verilog_files
+    )
 
     # Use top_module if provided, otherwise use name
     top_module = design.top_module if design.top_module else design.name
