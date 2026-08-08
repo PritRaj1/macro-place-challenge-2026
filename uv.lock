@@ -2322,6 +2322,10 @@ pritraj1 = [
     { name = "pillow", version = "11.3.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
     { name = "pillow", version = "12.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "ruff" },
+    { name = "scipy", version = "1.10.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
+    { name = "scipy", version = "1.13.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
+    { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.10.*'" },
+    { name = "scipy", version = "1.17.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 
 [package.metadata]
@@ -2337,6 +2341,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "ruff", marker = "extra == 'pritraj1'", specifier = ">=0.16.2" },
     { name = "scipy", marker = "extra == 'baselines'", specifier = ">=1.10.0" },
+    { name = "scipy", marker = "extra == 'pritraj1'", specifier = ">=1.10.1" },
     { name = "torch", specifier = ">=2.0.0" },
     { name = "torch-geometric", marker = "extra == 'baselines'", specifier = ">=2.3.0" },
     { name = "tqdm", specifier = ">=4.65.0" },
