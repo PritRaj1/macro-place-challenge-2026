@@ -1,3 +1,7 @@
+This is not a competition submission, (fork was created after closing). I'm just curious.
+
+
+---
 # Partcl/HRT Macro Placement Challenge
 
 <img src="assets/HRT.png" alt="Hudson River Trading" height="80"> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <img src="assets/partcl.png" alt="Partcl" height="80">
