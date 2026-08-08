@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import List, Tuple
 
 import numpy as np
+from numba import njit
 from scipy.optimize import linprog
 
 
@@ -204,7 +205,70 @@ def _solve_axis_lp(
     return res.x[:n].copy()
 
 
-def _sequential(
+@njit(fastmath=True)
+def _find_best(
+    target_x: float,
+    target_y: float,
+    hw_i: float,
+    hh_i: float,
+    cand_arr: np.ndarray,
+    legal_pos: np.ndarray,
+    half_sizes: np.ndarray,
+    placed_idxs: np.ndarray,
+    cw: float,
+    ch: float,
+    gap: float,
+) -> np.ndarray:
+    """
+    JIT-compiled candidate search kernel.
+    Returns the closest valid position (cx, cy).
+    """
+    num_placed = len(placed_idxs)
+    num_cands = len(cand_arr)
+
+    best_dist = 1e18
+    best_x = min(max(target_x, hw_i), cw - hw_i)
+    best_y = min(max(target_y, hh_i), ch - hh_i)
+    found = False
+
+    for c in range(num_cands):
+        cx = cand_arr[c, 0]
+        cy = cand_arr[c, 1]
+
+        # Bounds check
+        if cx < hw_i - 1e-5 or cx > cw - hw_i + 1e-5:
+            continue
+        if cy < hh_i - 1e-5 or cy > ch - hh_i + 1e-5:
+            continue
+
+        # Early prune by distance
+        d = (cx - target_x) ** 2 + (cy - target_y) ** 2
+        if d >= best_dist:
+            continue
+
+        # Overlap check against placed macros
+        collision = False
+        for k in range(num_placed):
+            p_idx = placed_idxs[k]
+            dx = abs(cx - legal_pos[p_idx, 0])
+            dy = abs(cy - legal_pos[p_idx, 1])
+            req_x = hw_i + half_sizes[p_idx, 0] + gap - 1e-5
+            req_y = hh_i + half_sizes[p_idx, 1] + gap - 1e-5
+
+            if dx < req_x and dy < req_y:
+                collision = True
+                break
+
+        if not collision:
+            best_dist = d
+            best_x = cx
+            best_y = cy
+            found = True
+
+    return np.array([best_x, best_y], dtype=np.float64), found
+
+
+def _greedy_legalize(
     pos: np.ndarray,
     sizes: np.ndarray,
     movable: np.ndarray,
@@ -212,64 +276,67 @@ def _sequential(
     ch: float,
     gap: float,
 ) -> np.ndarray:
-    """Sequential fallback from Will's seed"""
+    """
+    Final 2D candidate-point legalizer that guarantees no overlaps.
+    Places macros in descending order of size onto gaps.
+    """
     n = pos.shape[0]
     half = sizes / 2.0
-    sep_x = (sizes[:, 0:1] + sizes[:, 0:1].T) / 2 + gap
-    sep_y = (sizes[:, 1:2] + sizes[:, 1:2].T) / 2 + gap
-    order = sorted(range(n), key=lambda i: -sizes[i, 0] * sizes[i, 1])
-    placed = np.zeros(n, dtype=bool)
     legal = pos.copy()
 
-    for idx in order:
-        if not movable[idx]:
-            placed[idx] = True
-            continue
+    # Lock fixed macros in place and sort movable macros by area
+    placed = ~movable.copy()
+    movable_indices = np.where(movable)[0]
+    order = sorted(movable_indices, key=lambda i: -sizes[i, 0] * sizes[i, 1])
 
-        if placed.any():
-            dx = np.abs(legal[idx, 0] - legal[:, 0])
-            dy = np.abs(legal[idx, 1] - legal[:, 1])
-            hit = (dx < sep_x[idx]) & (dy < sep_y[idx]) & placed
-            hit[idx] = False
-            if not hit.any():
+    for idx in order:
+        hw_i, hh_i = half[idx]
+        target_x, target_y = pos[idx]
+        placed_idxs = np.where(placed)[0]
+
+        # Already legal?
+        if len(placed_idxs) > 0:
+            dx = np.abs(legal[idx, 0] - legal[placed_idxs, 0])
+            dy = np.abs(legal[idx, 1] - legal[placed_idxs, 1])
+            req_x = hw_i + half[placed_idxs, 0] + gap - 1e-5
+            req_y = hh_i + half[placed_idxs, 1] + gap - 1e-5
+
+            if not np.any((dx < req_x) & (dy < req_y)):
                 placed[idx] = True
                 continue
 
-        step = max(sizes[idx, 0], sizes[idx, 1]) * 0.25
-        best_p = legal[idx].copy()
-        best_d = float("inf")
-        for r in range(1, 150):
-            found = False
-            for dxm in range(-r, r + 1):
-                for dym in range(-r, r + 1):
-                    if abs(dxm) != r and abs(dym) != r:
-                        continue
+        # Generate candidate positions (canvas corners + edges of existing placed macros)
+        target_x_clamped = min(max(target_x, hw_i), cw - hw_i)
+        target_y_clamped = min(max(target_y, hh_i), ch - hh_i)
+        cand_x = [hw_i, cw - hw_i, target_x_clamped]
+        cand_y = [hh_i, ch - hh_i, target_y_clamped]
 
-                    cx = float(
-                        np.clip(
-                            pos[idx, 0] + dxm * step, half[idx, 0], cw - half[idx, 0]
-                        )
-                    )
-                    cy = float(
-                        np.clip(
-                            pos[idx, 1] + dym * step, half[idx, 1], ch - half[idx, 1]
-                        )
-                    )
-                    if placed.any():
-                        dx = np.abs(cx - legal[:, 0])
-                        dy = np.abs(cy - legal[:, 1])
-                        hit = (dx < sep_x[idx]) & (dy < sep_y[idx]) & placed
-                        hit[idx] = False
-                        if hit.any():
-                            continue
+        for j in placed_idxs:
+            px, py = legal[j]
+            hx, hy = half[j]
+            cand_x.extend([px - hx - hw_i - gap, px + hx + hw_i + gap])
+            cand_y.extend([py - hy - hh_i - gap, py + hy + hh_i + gap])
 
-                    d = (cx - pos[idx, 0]) ** 2 + (cy - pos[idx, 1]) ** 2
-                    if d < best_d:
-                        best_d = d
-                        best_p = np.array([cx, cy])
-                        found = True
-            if found:
-                break
+        valid_x = [x for x in cand_x if hw_i - 1e-5 <= x <= cw - hw_i + 1e-5]
+        valid_y = [y for y in cand_y if hh_i - 1e-5 <= y <= ch - hh_i + 1e-5]
+
+        full_grid = np.array(
+            [(x, y) for x in valid_x for y in valid_y], dtype=np.float64
+        )
+
+        best_p, _ = _find_best(
+            target_x,
+            target_y,
+            hw_i,
+            hh_i,
+            full_grid,
+            legal,
+            half,
+            placed_idxs,
+            cw,
+            ch,
+            gap,
+        )
 
         legal[idx] = best_p
         placed[idx] = True
@@ -283,11 +350,12 @@ def legalize_graph(
     movable: np.ndarray,
     canvas_width: float,
     canvas_height: float,
-    gap: float = 0.05,
+    gap: float = 0.1,
     prefer_displacement: bool = True,
+    max_iters: int = 3,
 ) -> np.ndarray:
     """
-    Legalize hard-macro centers via separation constraints + LP.
+    Legalize hard-macro centers via separation constraints + iterative LP.
 
       - prefer_displacement=True  -> minimize Σ|coord_i - pos_i|
       - prefer_displacement=False -> minimize Σ coord_i (compact to origin side)
@@ -300,12 +368,14 @@ def legalize_graph(
         canvas_height:       canvas height
         gap:                 extra clearance added to half-size separations
         prefer_displacement: use min-displacement objective when True
+        max_iters:           resolving along one axis can introduce new overlaps along the other, so iteratively refine.
+
 
     Returns:
         legal_pos [n, 2] with zero hard-macro overlaps (up to numerical tol),
         inside the canvas, fixed macros unchanged.
     """
-    pos = np.asarray(pos, dtype=np.float64)
+    pos = np.asarray(pos, dtype=np.float64).copy()
     sizes = np.asarray(sizes, dtype=np.float64)
     movable = np.asarray(movable, dtype=bool)
     n = pos.shape[0]
@@ -319,20 +389,28 @@ def legalize_graph(
     fixed_x = np.clip(pos[:, 0], low_x, high_x)
     fixed_y = np.clip(pos[:, 1], low_y, high_y)
 
-    h_edges, v_edges = _build_graph(pos, sizes, gap=gap)
+    current_pos = pos.copy()
 
-    target_x = pos[:, 0] if prefer_displacement else None
-    target_y = pos[:, 1] if prefer_displacement else None
+    # LP passes to un-clutter overlapping groups
+    for _ in range(max_iters):
+        h_edges, v_edges = _build_graph(current_pos, sizes, gap=gap)
 
-    xs = _solve_axis_lp(n, h_edges, low_x, high_x, fixed, fixed_x, target_x)
-    ys = _solve_axis_lp(n, v_edges, low_y, high_y, fixed, fixed_y, target_y)
+        if not h_edges and not v_edges:
+            break
 
-    # Fallback
-    if xs is None or ys is None:
-        print("[DEBUG]: sequential fallback called")
-        return _sequential(pos, sizes, movable, canvas_width, canvas_height, gap)
+        target_x = current_pos[:, 0] if prefer_displacement else None
+        target_y = current_pos[:, 1] if prefer_displacement else None
 
-    legal = pos.copy()
-    legal[:, 0] = np.clip(xs, low_x, high_x)
-    legal[:, 1] = np.clip(ys, low_y, high_y)
-    return legal
+        xs = _solve_axis_lp(n, h_edges, low_x, high_x, fixed, fixed_x, target_x)
+        ys = _solve_axis_lp(n, v_edges, low_y, high_y, fixed, fixed_y, target_y)
+
+        if xs is None or ys is None:
+            break
+
+        current_pos[:, 0] = np.clip(xs, low_x, high_x)
+        current_pos[:, 1] = np.clip(ys, low_y, high_y)
+
+    # Final pass to guarantee no overlaps
+    return _greedy_legalize(
+        current_pos, sizes, movable, canvas_width, canvas_height, gap
+    )
