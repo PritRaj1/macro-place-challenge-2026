@@ -79,40 +79,41 @@ def record_placer(placer_type: str, placer, benchmark, mod, langevin_interval: i
     # Patch BoltzmannPlacer.optimize and legalize_graph
     elif placer_type == "pritraj":
         orig_legalize = mod.legalize_graph
+        num_steps = placer.langevin_steps
 
-        def optimize_hook(self, pos_init, movable, num_steps=500, **kwargs):
-            pos = torch.tensor(pos_init, dtype=torch.float32, device=self.device)
-            movable_mask = torch.tensor(
-                movable, dtype=torch.bool, device=self.device
-            ).unsqueeze(-1)
-            low = self.half_sizes
-            high = (
-                torch.tensor([self.cw, self.ch], device=self.device) - self.half_sizes
+        def langevin_callback(*args, **kwargs):
+            step = kwargs.get("step")
+            pos = kwargs.get("pos")
+            temperature = kwargs.get(
+                "temperature",
+                None,
             )
 
-            lr = kwargs.get("lr", 0.001)
-            density_weight = kwargs.get("density_weight", 1000.0)
-            temp_start = kwargs.get("temp_start", 1.0)
-            temp_end = kwargs.get("temp_end", 0.001)
+            if pos is None and len(args) >= 2:
+                step = args[0]
+                pos = args[1]
 
-            for step in range(num_steps):
-                decay = step / num_steps
-                T_t = temp_start * ((temp_end / temp_start) ** decay)
+                if len(args) >= 3:
+                    temperature = args[2]
 
-                g_wl = self.wirelength_score(pos)
-                g_density = self.density_score(pos)
-                grad = g_wl + density_weight * g_density
+            if step is None:
+                step = 0
+            if step % langevin_interval != 0 and step != num_steps - 1:
+                return
 
-                noise = torch.randn_like(pos)
-                update = -lr * grad + np.sqrt(2.0 * lr * T_t) * noise
+            if isinstance(pos, np.ndarray):
+                pos_tensor = torch.from_numpy(pos.astype(np.float32))
+            else:
+                pos_tensor = pos.detach().cpu()
 
-                pos = torch.where(movable_mask, pos + update, pos)
-                pos = torch.clamp(pos, low, high)
+            if temperature is None:
+                title = f"Langevin Step {step + 1}/{num_steps}"
+            else:
+                title = f"Langevin Step {step + 1}/{num_steps} (T={temperature:.3g})"
 
-                if step % langevin_interval == 0 or step == num_steps - 1:
-                    rec.add_frame(pos.cpu(), f"Langevin Step {step}/{num_steps}")
+            rec.add_frame(pos_tensor, title)
 
-            return pos.cpu().numpy().astype(np.float64)
+        placer._placement_callback = langevin_callback
 
         def legalize_hook(pos, *args, **kwargs):
             rec.add_frame(pos, "Pre-Legalization (Global Done)")
@@ -121,16 +122,31 @@ def record_placer(placer_type: str, placer, benchmark, mod, langevin_interval: i
             return legal_pos
 
         patches = [
-            (mod.BoltzmannPlacer, "optimize", optimize_hook),
             (mod, "legalize_graph", legalize_hook),
         ]
 
-    # Execute placement under monkey-patch context
-    with patch_methods(patches):
-        final_full_pos = placer.place(benchmark)
+    else:
+        raise ValueError(f"Unknown placer_type: {placer_type}")
 
-    rec.add_frame(final_full_pos, "Final State (Stdcells Unoptimized)")
-    return rec.frames, rec.titles
+    original_callback = getattr(placer, "_placement_callback", None)
+
+    # Restore og callback after placement.
+    try:
+        with patch_methods(patches):
+            final_full_pos = placer.place(benchmark)
+    finally:
+        if placer_type == "pritraj":
+            placer._placement_callback = original_callback
+
+    rec.add_frame(
+        final_full_pos,
+        "Final State (Stdcells Unoptimized)",
+    )
+
+    return (
+        rec.frames,
+        rec.titles,
+    )
 
 
 def main():
@@ -144,7 +160,7 @@ def main():
             "type": "pritraj",
             "import_path": "submissions.pritraj1.placer",
             "class_name": "PritRajPlacer",
-            "kwargs": {"seed": 42, "langevin_steps": 10, "fast_mode": False},
+            "kwargs": {"seed": 42, "langevin_steps": 600, "fast_mode": False},
             "output_gif": "gifs/pritraj_ibm01.gif",
             "output_png": "gifs/pritraj_ibm01.png",
             "fps": 1,
@@ -153,7 +169,7 @@ def main():
             "type": "will",
             "import_path": "submissions.will_seed.placer",
             "class_name": "WillSeedPlacer",
-            "kwargs": {"seed": 42, "refine_iters": 100},
+            "kwargs": {"seed": 42, "refine_iters": 1000},
             "output_gif": "gifs/will_seed_ibm01.gif",
             "output_png": "gifs/will_seed_ibm01.png",
             "fps": 1,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import torch
 
@@ -321,6 +323,7 @@ class BoltzmannPlacer:
         noise_scale: float = 1.0,
         verbose: bool = False,
         log_every: int = 50,
+        callback: Callable | None = None,
     ) -> np.ndarray:
         """Optimize macro positions with annealed Langevin dynamics.
 
@@ -454,6 +457,16 @@ class BoltzmannPlacer:
                 candidate,
                 fixed_pos,
             )
+
+            if callback is not None:
+                callback(
+                    step=step,
+                    pos=pos,
+                    temperature=temperature,
+                    energy=e_total,
+                    wirelength=e_wl,
+                    density=e_density,
+                )
 
             if verbose and (step % log_every == 0 or step == num_steps - 1):
                 grad_norm_value = torch.linalg.vector_norm(grad).detach().item()

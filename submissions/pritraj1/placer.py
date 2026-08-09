@@ -74,6 +74,7 @@ class PritRajPlacer:
         self.seed = seed
         self.langevin_steps = langevin_steps
         self.fast_mode = fast_mode
+        self._placement_callback = None
 
     def place(self, benchmark: Benchmark) -> torch.Tensor:
         torch.manual_seed(self.seed)
@@ -98,16 +99,17 @@ class PritRajPlacer:
                 nets=nets,
                 canvas_width=cw,
                 canvas_height=ch,
-                gap=0.1,
+                gap=0.01, # smaller gap permitted for global placer
             )
             global_pos = placer.optimize(
                 pos_init=pos_init,
                 movable=movable,
                 num_steps=self.langevin_steps,
-                lr=0.001,
-                density_weight=100.0,
+                lr=0.005,
+                density_weight=30.0,
                 temp_start=1.0,
                 temp_end=0.001,
+                callback=self._placement_callback,
             )
         else:
             global_pos = pos_init
