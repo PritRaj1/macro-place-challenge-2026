@@ -123,10 +123,10 @@ class PritRajPlacer:
                 movable=movable,
                 num_steps=self.langevin_steps,
                 lr=0.005,
-                density_weight=0.5,
-                congestion_weight=1.0,
+                density_weight=10.0,
+                congestion_weight=0.5,
                 temp_start=1.0,
-                temp_end=0.001,
+                temp_end=0.0001,
                 callback=self._placement_callback,
             )
         else:
@@ -146,7 +146,6 @@ class PritRajPlacer:
         if plc is not None and not self.fast_mode:
             for bidx, module_idx in enumerate(plc.hard_macro_indices):
                 module = plc.modules_w_pins[module_idx]
-
                 new_x = legal_pos[bidx][0]
                 new_y = legal_pos[bidx][1]
 

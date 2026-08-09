@@ -96,11 +96,8 @@ class BoltzmannPlacer:
                 continue
 
             pad_len = max_net_len - len(net)
-
             padded_nets.append(net + [0] * pad_len)
-
             mask = [1.0] * len(net) + [0.0] * pad_len
-
             net_masks.append(mask)
 
         if padded_nets:
