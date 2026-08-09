@@ -26,6 +26,7 @@ def _load_plc(name):
         "nvdla_ng45": "nvdla",
         "mempool_tile_ng45": "mempool_tile",
     }
+
     d = ng45.get(name)
     if d:
         base = (
@@ -34,9 +35,11 @@ def _load_plc(name):
             / "netlist"
             / "output_CT_Grouping"
         )
+
         if (base / "netlist.pb.txt").exists():
             _, plc = load_benchmark(
-                str(base / "netlist.pb.txt"), str(base / "initial.plc")
+                str(base / "netlist.pb.txt"),
+                str(base / "initial.plc"),
             )
             return plc
 
@@ -49,14 +52,18 @@ def _extract_hypergraph_nets(benchmark, plc) -> list[list[int]]:
         return []
 
     name_to_bidx = {}
+
     for bidx, idx in enumerate(plc.hard_macro_indices):
         name_to_bidx[plc.modules_w_pins[idx].get_name()] = bidx
 
     nets = []
+
     for driver, sinks in plc.nets.items():
         macro_set = set()
+
         for pin in [driver] + sinks:
             parent = pin.split("/")[0]
+
             if parent in name_to_bidx:
                 macro_set.add(name_to_bidx[parent])
 
@@ -69,7 +76,10 @@ def _extract_hypergraph_nets(benchmark, plc) -> list[list[int]]:
 
 class PritRajPlacer:
     def __init__(
-        self, seed: int = 42, langevin_steps: int = 600, fast_mode: bool = False
+        self,
+        seed: int = 42,
+        langevin_steps: int = 600,
+        fast_mode: bool = False,
     ):
         self.seed = seed
         self.langevin_steps = langevin_steps
@@ -83,13 +93,19 @@ class PritRajPlacer:
 
         n_hard = benchmark.num_hard_macros
         sizes_np = benchmark.macro_sizes[:n_hard].numpy().astype(np.float64)
+
         cw = float(benchmark.canvas_width)
         ch = float(benchmark.canvas_height)
+
         movable = benchmark.get_movable_mask()[:n_hard].numpy()
 
         # Extract netlist hypergraph topology and initial center positions
         plc = _load_plc(benchmark.name)
-        nets = _extract_hypergraph_nets(benchmark, plc)
+        nets = _extract_hypergraph_nets(
+            benchmark,
+            plc,
+        )
+
         pos_init = benchmark.macro_positions[:n_hard].numpy().copy().astype(np.float64)
 
         # Smooth Energy-Based Langevin Global Placement
@@ -99,14 +115,16 @@ class PritRajPlacer:
                 nets=nets,
                 canvas_width=cw,
                 canvas_height=ch,
-                gap=0.01, # smaller gap permitted for global placer
+                gap=0.1,
             )
+
             global_pos = placer.optimize(
                 pos_init=pos_init,
                 movable=movable,
                 num_steps=self.langevin_steps,
                 lr=0.005,
-                density_weight=30.0,
+                density_weight=0.5,
+                congestion_weight=1.0,
                 temp_start=1.0,
                 temp_end=0.001,
                 callback=self._placement_callback,
@@ -128,11 +146,18 @@ class PritRajPlacer:
         if plc is not None and not self.fast_mode:
             for bidx, module_idx in enumerate(plc.hard_macro_indices):
                 module = plc.modules_w_pins[module_idx]
-                new_x, new_y = legal_pos[bidx][0], legal_pos[bidx][1]
-                module.set_pos(new_x, new_y)
+
+                new_x = legal_pos[bidx][0]
+                new_y = legal_pos[bidx][1]
+
+                module.set_pos(
+                    new_x,
+                    new_y,
+                )
 
             # Force-directed placement to re-align soft macros around updated hard macros
             canvas_size = max(cw, ch)
+
             plc.optimize_stdcells(
                 use_current_loc=False,
                 move_stdcells=True,
@@ -147,7 +172,10 @@ class PritRajPlacer:
             )
 
         full_pos = benchmark.macro_positions.clone()
-        full_pos[:n_hard] = torch.tensor(legal_pos, dtype=torch.float32)
+        full_pos[:n_hard] = torch.tensor(
+            legal_pos,
+            dtype=torch.float32,
+        )
 
         # Update soft macro positions tensor if plc was available
         if (
@@ -157,6 +185,10 @@ class PritRajPlacer:
         ):
             for bidx, module_idx in enumerate(plc.soft_macro_indices):
                 pos = plc.modules_w_pins[module_idx].get_pos()
-                full_pos[n_hard + bidx] = torch.tensor(pos, dtype=torch.float32)
+
+                full_pos[n_hard + bidx] = torch.tensor(
+                    pos,
+                    dtype=torch.float32,
+                )
 
         return full_pos
