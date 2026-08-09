@@ -117,42 +117,100 @@ class BoltzmannPlacer:
         else:
             self.nonself_mask = None
 
+        self.density_nx = 64
+        self.density_ny = 64
+
+        self.grid_x = (
+            torch.arange(
+                self.density_nx,
+                dtype=torch.float32,
+                device=self.device,
+            )
+            + 0.5
+        ) * (self.cw / self.density_nx)
+
+        self.grid_y = (
+            torch.arange(
+                self.density_ny,
+                dtype=torch.float32,
+                device=self.device,
+            )
+            + 0.5
+        ) * (self.ch / self.density_ny)
+
+        grid_x, grid_y = torch.meshgrid(
+            self.grid_x,
+            self.grid_y,
+            indexing="xy",
+        )
+
+        self.density_grid = torch.stack(
+            [grid_x, grid_y],
+            dim=-1,
+        )
+
+        self.target_density = self.n / (self.density_nx * self.density_ny)
+
     def density_score(
         self,
         pos: torch.Tensor,
         short_range_weight: float = 0.25,
+        canvas_density_weight: float = 1.0,
     ) -> torch.Tensor:
-        """Pairwise Gaussian overlap energy.
+        """
+        Density energy combining:
 
-        E_density = 0.5 * sum_{i != j} E_ij
+        1. Pairwise Gaussian repulsion 0.5 * sum_{i != j} E_ij.
+        2. Canvas-aware density matching.
 
         Args:
-            pos: centres of shape [N, 2].
-            short_range_weight: weight of narrower short-range Gaussian.
+            pos: centres, shape [N, 2].
+            short_range_weight: strength of short-range pairwise Gaussian.
+            canvas_density_weight: weight of canvas occupancy penalty.
 
         Returns:
-            scalar density energy.
+            Scalar density energy.
         """
-
         if self.n <= 1:
-            return torch.zeros(
+            pairwise_energy = torch.zeros(
                 (),
                 dtype=pos.dtype,
                 device=pos.device,
             )
 
-        diff = pos.unsqueeze(1) - pos.unsqueeze(0)
-        norm_dist_sq = diff.square() / self.var_sum
-        total_dist_sq = norm_dist_sq.sum(dim=-1)
-        overlap = torch.exp(-0.5 * total_dist_sq)
+        else:
+            diff = pos.unsqueeze(1) - pos.unsqueeze(0)
+            norm_dist_sq = diff.square() / self.var_sum
+            total_dist_sq = norm_dist_sq.sum(dim=-1)
+            overlap = torch.exp(-0.5 * total_dist_sq)
 
-        # Short-range Gaussian: stronger local interaction when close
-        short_var_sum = (self.var_sum * 0.25).clamp_min(1e-8)
-        short_dist_sq = (diff.square() / short_var_sum).sum(dim=-1)
-        short_overlap = torch.exp(-0.5 * short_dist_sq)
-        overlap = overlap + short_range_weight * short_overlap
-        overlap = overlap * self.nonself_mask
-        return 0.5 * overlap.sum()
+            # Stronger short-range interaction.
+            short_var_sum = (self.var_sum * 0.25).clamp_min(1e-8)
+            short_dist_sq = (diff.square() / short_var_sum).sum(dim=-1)
+            short_overlap = torch.exp(-0.5 * short_dist_sq)
+            overlap = overlap + short_range_weight * short_overlap
+            overlap = overlap * self.nonself_mask
+            pairwise_energy = 0.5 * overlap.sum()
+
+        diff_grid = pos[:, None, None, :] - self.density_grid[None, :, :, :]
+        sigma = self.sigmas[:, None, None, :].clamp_min(1e-4)
+        exponent = -0.5 * (diff_grid.square() / sigma.square()).sum(dim=-1)
+
+        gaussian_mass = torch.exp(exponent)
+        gaussian_mass = gaussian_mass / gaussian_mass.sum(
+            dim=(1, 2),
+            keepdim=True,
+        ).clamp_min(1e-8)
+        density = gaussian_mass.sum(dim=0)
+
+        # Penalize deviation from uniform density.
+        target = torch.full_like(
+            density,
+            self.target_density,
+        )
+        density_error = density - target
+        canvas_energy = 0.5 * (density_error.square().mean())
+        return pairwise_energy + canvas_density_weight * canvas_energy
 
     def wirelength_score(
         self,
@@ -218,13 +276,11 @@ class BoltzmannPlacer:
             min_logits,
             dim=1,
         )
-
         min_weights = min_weights * mask
         min_weights = min_weights / min_weights.sum(
             dim=1,
             keepdim=True,
         ).clamp_min(1e-8)
-
         wa_min = (net_coords * min_weights).sum(dim=1)
 
         # Sum x/y wirelength over all nets.
