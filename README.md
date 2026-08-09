@@ -1,14 +1,16 @@
 This is not a competition submission, (fork was created after closing). I'm just curious.
 
+My solution is [here](/submissions/pritraj1/README.md)
 
 ---
+
 # Partcl/HRT Macro Placement Challenge
 
 <img src="assets/HRT.png" alt="Hudson River Trading" height="80"> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <img src="assets/partcl.png" alt="Partcl" height="80">
 
 Partcl and Hudson River Trading are excited to co-host a competition to solve the macro placement problem.
 
-## 🎉 Announcing the Winners!
+## 🎉 Announcing the Winners
 
 Today, we're excited to announce the winners of the inaugural Partcl × Hudson River Trading Macro Placement Challenge!
 
@@ -53,6 +55,7 @@ Thank You!
 Macro placement is the problem of positioning large fixed-size blocks (SRAMs, IPs, analog macros, etc.) on a chip floorplan so that routing congestion, timing, power delivery, and area constraints are balanced. Unlike standard-cell placement, macros have strong geometric and connectivity constraints, so the challenge is to explore a highly discrete design space while minimizing wirelength, avoiding blockages, and preserving downstream routability and timing quality.
 
 For example, the **ibm01** benchmark has:
+
 - **246 hard macros** of varying sizes (ranging from 0.8 to 27 μm², with 33× size variation)
 - **7,269 nets** connecting macros to each other and to 894 pre-placed standard cell clusters
 - **A 22.9 × 23.0 μm canvas** with 42.8% area utilization
@@ -83,6 +86,7 @@ We’re changing that.
 Partcl develops GPU-accelerated systems for physical design that run orders of magnitude faster than legacy tools. Our goal is simple: make iteration cheap enough that design space exploration becomes the default, not the exception.
 
 ## Background Papers
+
 [1] [An Updated Assessment of Reinforcement Learning for Macro Placement](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=11300304)
 
 [2] [Assessment of Reinforcement Learning for Macro Placement](https://vlsicad.ucsd.edu/Publications/Conferences/396/c396.pdf)
@@ -93,7 +97,7 @@ Partcl develops GPU-accelerated systems for physical design that run orders of m
 
 ## 🏆 Prizes
 
-- **$20,000 — Grand Prize:** The top 7 submissions by proxy score are evaluated through the OpenROAD flow on NG45 designs (including hidden designs). Among those 7, the submission that beats the SA and RePlAce baselines (reported in [An Updated Assessment of Reinforcement Learning for Macro Placement](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=11300304)) by the largest margin on WNS, TNS, and Area wins the Grand Prize. 
+- **$20,000 — Grand Prize:** The top 7 submissions by proxy score are evaluated through the OpenROAD flow on NG45 designs (including hidden designs). Among those 7, the submission that beats the SA and RePlAce baselines (reported in [An Updated Assessment of Reinforcement Learning for Macro Placement](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=11300304)) by the largest margin on WNS, TNS, and Area wins the Grand Prize.
 - **$20,000 — First Place (Proxy):** Awarded to the #1 submission by proxy score. Only awarded if no submission qualifies for the Grand Prize.
 - **$5,000 — Second Place:** Awarded to the runner-up of the Grand Prize. If no submission qualifies for the Grand Prize, awarded to the #2 submission by proxy score.
 - **$4,000 — Innovation Award:** Granted to the most creative or technically innovative approach among the top entries, as determined by the judging panel.
@@ -158,7 +162,7 @@ The top 7 submissions by proxy score will be evaluated through the full **OpenRO
 
 ## 🚀 Quick Start
 
-### Installation 
+### Installation
 
 ```bash
 # Clone the repository
@@ -193,6 +197,7 @@ uv run evaluate submissions/examples/greedy_row_placer.py --all --vis
 ```
 
 Running on all benchmarks produces a summary like:
+
 ```
 Benchmark     Proxy        SA   RePlAce     vs SA  vs RePlAce  Overlaps
    ibm01    2.0463    1.3166    0.9976    -55.4%     -105.1%         0
@@ -228,12 +233,14 @@ We evaluate on the complete ICCAD04 IBM benchmark suite:
 | **ibm18** | 537 | 16,253 | 34.0×34.4 | 53.4% | 2.7755 | **1.7722** ⭐ |
 
 Each benchmark includes:
+
 - Hard macros (you place these)
 - Soft macros (you can also place these)
 - Nets connecting all components
 - Initial placement (hand-crafted, serves as reference)
 
 **Baseline Analysis:**
+
 - RePlAce (⭐) consistently outperforms SA across all benchmarks
 - RePlAce achieves 15-55% lower proxy cost than SA
 - **To qualify for the Grand Prize, your placement must also produce better WNS, TNS, and Area than both baselines when evaluated through the OpenROAD flow on NG45 designs**
@@ -430,7 +437,7 @@ A: For proxy cost (Tier 1), your aggregate score across all IBM benchmarks must 
 ## 📧 Contact
 
 - **Issues**: [GitHub Issues](https://github.com/partcleda/partcl-macro-place-challenge/issues)
-- **Email**: contact@partcl.com
+- **Email**: <contact@partcl.com>
 
 ## 📄 License
 

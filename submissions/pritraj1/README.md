@@ -1,3 +1,5 @@
+This is not a competition submission, (fork was created after closing). I'm just curious.
+
 # Plan
 
 Two parts to the problem:
