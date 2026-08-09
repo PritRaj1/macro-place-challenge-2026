@@ -10,6 +10,8 @@ Usage:
     uv run evaluate submissions/examples/greedy_row_placer.py -b ibm03
 """
 
+from __future__ import annotations
+
 import argparse
 import importlib.util
 import sys
@@ -129,7 +131,7 @@ def _load_placer(path: Path):
 
 
 def evaluate_benchmark(
-    placer, name: str, testcase_root: str, ng45_dir: str = None
+    placer, name: str, testcase_root: str, ng45_dir: str | None = None
 ) -> dict:
     """Run *placer* on a single benchmark and return a results dict."""
     if ng45_dir:
@@ -144,7 +146,7 @@ def evaluate_benchmark(
     placement = placer.place(benchmark)
     runtime = time.time() - start
 
-    is_valid, violations = validate_placement(placement, benchmark)
+    is_valid, _violations = validate_placement(placement, benchmark)
     costs = compute_proxy_cost(placement, benchmark, plc)
 
     return {

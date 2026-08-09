@@ -5,12 +5,12 @@ This allows exporting placement results to industry-standard DEF format
 for use with EDA tools like Innovus, ICC2, OpenROAD, etc.
 """
 
-from typing import Optional
+from __future__ import annotations
 
 from macro_place._plc import PlacementCost
 
 
-def write_def(plc: PlacementCost, def_file: str, design_name: Optional[str] = None):
+def write_def(plc: PlacementCost, def_file: str, design_name: str | None = None):
     """
     Write placement to DEF (Design Exchange Format) file.
 
@@ -65,7 +65,7 @@ def write_def(plc: PlacementCost, def_file: str, design_name: Optional[str] = No
 
 def _write_rows(fp, plc: PlacementCost, db_unit: int):
     """Write ROW definitions for standard cell sites."""
-    canvas_width, canvas_height = plc.get_canvas_width_height()
+    _canvas_width, canvas_height = plc.get_canvas_width_height()
 
     # Estimate site size from grid or standard cell heights
     # Use grid as approximation

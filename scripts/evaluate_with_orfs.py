@@ -15,6 +15,8 @@ Usage:
     python scripts/evaluate_with_orfs.py --benchmark ariane133_ng45 --skip-synthesis  # Skip Yosys
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import re
@@ -52,6 +54,7 @@ try:
     from orfs_integration.design_generator import ORFSDesign, create_orfs_design
 except ImportError:
     create_orfs_design = None  # Only needed for fallback config generation
+
 from generate_macro_placement_tcl import write_orfs_macro_placement
 
 
@@ -274,7 +277,7 @@ def evaluate_benchmark(
     output_dir: Path,
     use_docker: bool = True,
     skip_synthesis: bool = False,
-    placement_path: Path = None,
+    placement_path: Path | None = None,
 ) -> dict:
     """Evaluate a single benchmark."""
     print(f"\n{'=' * 80}")

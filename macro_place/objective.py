@@ -5,8 +5,9 @@ Wraps PlacementCost methods to compute wirelength, density, and congestion costs
 Also computes overlap metrics for validation and analysis.
 """
 
+from __future__ import annotations
+
 import math
-from typing import Dict, Optional
 
 import torch
 
@@ -36,7 +37,7 @@ PlacementCost._PlacementCost__get_grid_cell_location = _patched_get_grid_cell_lo
 
 def compute_overlap_metrics(
     placement: torch.Tensor, benchmark: Benchmark
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """
     Compute overlap metrics for macro placement.
 
@@ -116,8 +117,8 @@ def compute_proxy_cost(
     placement: torch.Tensor,
     benchmark: Benchmark,
     plc: PlacementCost,
-    weights: Optional[Dict[str, float]] = None,
-) -> Dict[str, float]:
+    weights: dict[str, float] | None = None,
+) -> dict[str, float]:
     """
     Compute proxy cost using PlacementCost's ground truth evaluator.
 

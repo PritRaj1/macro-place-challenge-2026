@@ -50,7 +50,7 @@ class ShelfPackPlacer:
         num_macros = benchmark.num_macros
         sizes = benchmark.macro_sizes
         canvas_w = canvas_override[0] if canvas_override else benchmark.canvas_width
-        canvas_h = canvas_override[1] if canvas_override else benchmark.canvas_height
+        canvas_override[1] if canvas_override else benchmark.canvas_height
         EPS = 1e-3
 
         movable = [i for i in range(num_macros) if not benchmark.macro_fixed[i]]

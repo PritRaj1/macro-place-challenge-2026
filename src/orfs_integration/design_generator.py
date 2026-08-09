@@ -1,5 +1,7 @@
 """Generate ORFS design configurations from our benchmarks."""
 
+from __future__ import annotations
+
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,7 +21,7 @@ class ORFSDesign:
 
 
 def create_orfs_design(
-    design: ORFSDesign, orfs_root: Path, source_dir: Path = None
+    design: ORFSDesign, orfs_root: Path, source_dir: Path | None = None
 ) -> Path:
     """
     Create ORFS design directory.

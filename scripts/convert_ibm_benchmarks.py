@@ -51,7 +51,7 @@ def main():
 
         try:
             # Load and convert
-            benchmark, plc = load_benchmark_from_dir(str(benchmark_dir))
+            benchmark, _plc = load_benchmark_from_dir(str(benchmark_dir))
 
             # Save as .pt
             output_file = output_dir / f"{name}.pt"

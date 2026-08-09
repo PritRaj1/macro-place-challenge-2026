@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Tuple
-
 import numpy as np
 from numba import njit
 from scipy.optimize import linprog
@@ -11,7 +9,7 @@ def _build_graph(
     pos: np.ndarray,
     sizes: np.ndarray,
     gap: float = 0.05,
-) -> Tuple[List[Tuple[int, int, float]], List[Tuple[int, int, float]]]:
+) -> tuple[list[tuple[int, int, float]], list[tuple[int, int, float]]]:
     """
     From macro centers, build pairwise relative-order graph of separation constraints
     (each pair contributes one horizontal or vertical separation edge)
@@ -38,8 +36,8 @@ def _build_graph(
     # Overlap condition
     overlapping = (abs_dx < sep_x) & (abs_dy < sep_y)
 
-    h_edges: List[Tuple[int, int, float]] = []
-    v_edges: List[Tuple[int, int, float]] = []
+    h_edges: list[tuple[int, int, float]] = []
+    v_edges: list[tuple[int, int, float]] = []
 
     if not np.any(overlapping):
         return h_edges, v_edges
@@ -75,12 +73,12 @@ def _build_graph(
 
 def _bottom_compact(
     n: int,
-    edges: List[Tuple[int, int, float]],
+    edges: list[tuple[int, int, float]],
     low: np.ndarray,
     high: np.ndarray,
     fixed: np.ndarray,
     fixed_vals: np.ndarray,
-) -> Tuple[np.ndarray, list, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, list, np.ndarray, np.ndarray]:
     """
     min Σ coord_i  (bottom / left compact)
     Returns: c, bounds, A_ub, b_ub
@@ -95,8 +93,8 @@ def _bottom_compact(
             bounds.append((float(low[i]), float(high[i])))
 
     # coord_i - coord_j <= -w  <->  coord_j >= coord_i + w
-    A_rows: List[np.ndarray] = []
-    b_ub: List[float] = []
+    A_rows: list[np.ndarray] = []
+    b_ub: list[float] = []
     for i, j, w in edges:
         row = np.zeros(n)
         row[i] = 1.0
@@ -110,13 +108,13 @@ def _bottom_compact(
 
 def _min_displacement(
     n: int,
-    edges: List[Tuple[int, int, float]],
+    edges: list[tuple[int, int, float]],
     low: np.ndarray,
     high: np.ndarray,
     fixed: np.ndarray,
     fixed_vals: np.ndarray,
     target: np.ndarray,
-) -> Tuple[np.ndarray, list, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, list, np.ndarray, np.ndarray]:
     """
     min Σ |coord_i - target_i|
     vars: coord[0:n], t[0:n] with t_i >= |coord_i - target_i|
@@ -134,8 +132,8 @@ def _min_displacement(
             bounds.append((float(low[i]), float(high[i])))
     bounds.extend([(0.0, None)] * n)
 
-    A_rows: List[np.ndarray] = []
-    b_ub: List[float] = []
+    A_rows: list[np.ndarray] = []
+    b_ub: list[float] = []
 
     for i in range(n):
         # t_i >= coord_i - target_i  ->  coord_i - t_i <= target_i
@@ -165,7 +163,7 @@ def _min_displacement(
 
 def _solve_axis_lp(
     n: int,
-    edges: List[Tuple[int, int, float]],
+    edges: list[tuple[int, int, float]],
     low: np.ndarray,
     high: np.ndarray,
     fixed: np.ndarray,
@@ -278,7 +276,7 @@ def _greedy_legalize(
     Final 2D candidate-point legalizer that guarantees no overlaps.
     Places macros in descending order of size onto gaps.
     """
-    n = pos.shape[0]
+    pos.shape[0]
     half = sizes / 2.0
     legal = pos.copy()
 

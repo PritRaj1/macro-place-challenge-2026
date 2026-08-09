@@ -35,7 +35,7 @@ def test_load_benchmark_pt():
 
 def test_load_benchmark_from_dir(ibm01):
     """Benchmark can be loaded from ICCAD04 directory."""
-    benchmark, plc = ibm01
+    benchmark, _plc = ibm01
     assert benchmark.num_macros > 0
     assert benchmark.canvas_width > 0
     assert benchmark.canvas_height > 0
@@ -54,7 +54,7 @@ def test_compute_proxy_cost(ibm01):
 
 def test_validate_placement(ibm01):
     """Validation function runs without errors on default placement."""
-    benchmark, plc = ibm01
+    benchmark, _plc = ibm01
     is_valid, violations = validate_placement(benchmark.macro_positions, benchmark)
     # Default placement may have overlaps — we just check the function works
     assert isinstance(is_valid, bool)

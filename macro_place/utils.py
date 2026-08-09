@@ -2,8 +2,9 @@
 Utility functions for placement validation and visualization.
 """
 
+from __future__ import annotations
+
 import sys
-from typing import List, Optional, Tuple
 
 import torch
 
@@ -12,7 +13,7 @@ from macro_place.benchmark import Benchmark
 
 def validate_placement(
     placement: torch.Tensor, benchmark: Benchmark, check_overlaps: bool = True
-) -> Tuple[bool, List[str]]:
+) -> tuple[bool, list[str]]:
     """
     Validate placement legality.
 
@@ -183,7 +184,7 @@ def _draw_hard_macros(ax, placement, benchmark):
 def visualize_placement(
     placement: torch.Tensor,
     benchmark: Benchmark,
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
     plc=None,
 ):
     """
@@ -407,10 +408,10 @@ def visualize_placement(
 
 
 def animate_placement(
-    placements: List[torch.Tensor],
+    placements: list[torch.Tensor],
     benchmark: Benchmark,
     save_path: str,
-    titles: Optional[List[str]] = None,
+    titles: list[str] | None = None,
     fps: float = 8.0,
     dpi: int = 110,
 ) -> None:

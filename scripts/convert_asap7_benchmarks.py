@@ -27,7 +27,7 @@ def main():
             continue
 
         try:
-            benchmark, plc = load_benchmark_from_dir(str(benchmark_dir))
+            benchmark, _plc = load_benchmark_from_dir(str(benchmark_dir))
             output_file = output_dir / f"{name}.pt"
             benchmark.save(str(output_file))
             print(f"✓ {name:25} -> {output_file.name}")

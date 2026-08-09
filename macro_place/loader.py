@@ -4,8 +4,9 @@ Benchmark loader - extracts data from PlacementCost into PyTorch tensors.
 Leverages the existing MacroPlacement parser instead of reimplementing.
 """
 
+from __future__ import annotations
+
 import os
-from typing import Optional, Tuple
 
 import torch
 
@@ -14,8 +15,8 @@ from macro_place.benchmark import Benchmark
 
 
 def load_benchmark(
-    netlist_file: str, plc_file: Optional[str] = None, name: Optional[str] = None
-) -> Tuple[Benchmark, PlacementCost]:
+    netlist_file: str, plc_file: str | None = None, name: str | None = None
+) -> tuple[Benchmark, PlacementCost]:
     """
     Load benchmark from ICCAD04 format using PlacementCost parser.
 
@@ -210,7 +211,7 @@ def load_benchmark(
     return benchmark, plc
 
 
-def load_benchmark_from_dir(benchmark_dir: str) -> Tuple[Benchmark, PlacementCost]:
+def load_benchmark_from_dir(benchmark_dir: str) -> tuple[Benchmark, PlacementCost]:
     """
     Convenience wrapper to load from directory.
 

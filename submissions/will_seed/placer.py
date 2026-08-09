@@ -51,7 +51,6 @@ def _load_plc(name):
 
 
 def _extract_edges(benchmark, plc):
-    n_hard = benchmark.num_hard_macros
     name_to_bidx = {}
     for bidx, idx in enumerate(plc.hard_macro_indices):
         name_to_bidx[plc.modules_w_pins[idx].get_name()] = bidx

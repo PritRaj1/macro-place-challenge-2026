@@ -4,8 +4,9 @@ Benchmark data structure for macro placement.
 Pure PyTorch tensor representation of placement benchmarks.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import List
 
 import torch
 
@@ -36,11 +37,11 @@ class Benchmark:
     macro_positions: torch.Tensor  # [num_macros, 2] - (x, y) centers
     macro_sizes: torch.Tensor  # [num_macros, 2] - (width, height)
     macro_fixed: torch.Tensor  # [num_macros] - bool, True if fixed
-    macro_names: List[str]  # [num_macros] - names for debugging
+    macro_names: list[str]  # [num_macros] - names for debugging
 
     # Nets (hypergraph connectivity)
     num_nets: int
-    net_nodes: List[torch.Tensor]  # List of [nodes_in_net_i] - node indices
+    net_nodes: list[torch.Tensor]  # List of [nodes_in_net_i] - node indices
     net_weights: torch.Tensor  # [num_nets] - net weights (default 1.0)
 
     # Grid (for metrics)
@@ -54,7 +55,7 @@ class Benchmark:
 
     # Hard macro pin offsets (relative to macro center)
     # List of [num_pins_i, 2] tensors, one per hard macro (indices [0, num_hard_macros))
-    macro_pin_offsets: List[torch.Tensor] = field(default_factory=list)
+    macro_pin_offsets: list[torch.Tensor] = field(default_factory=list)
 
     # Pin-level net connectivity (optional; empty list if not populated)
     # Each net_pin_nodes[i] is an int64 tensor of shape [num_pins_in_net_i, 2] where:
@@ -69,15 +70,15 @@ class Benchmark:
     # Unlike net_nodes (which dedups to per-macro granularity), this preserves
     # every pin endpoint — multiple pins on the same macro appear as multiple rows.
     # Needed by placers computing pin-level HPWL for differentiable loss.
-    net_pin_nodes: List[torch.Tensor] = field(default_factory=list)
+    net_pin_nodes: list[torch.Tensor] = field(default_factory=list)
 
     # Routing parameters
     hroutes_per_micron: float = 11.285  # Horizontal routing tracks per micron
     vroutes_per_micron: float = 12.605  # Vertical routing tracks per micron
 
     # PlacementCost mapping (tensor index → PlacementCost module index)
-    hard_macro_indices: List[int] = field(default_factory=list)
-    soft_macro_indices: List[int] = field(default_factory=list)
+    hard_macro_indices: list[int] = field(default_factory=list)
+    soft_macro_indices: list[int] = field(default_factory=list)
 
     # Counts
     num_hard_macros: int = 0
@@ -149,7 +150,7 @@ class Benchmark:
         )
 
     @classmethod
-    def load(cls, path: str) -> "Benchmark":
+    def load(cls, path: str) -> Benchmark:
         """Load benchmark from .pt file."""
         data = torch.load(path, weights_only=False)
         # Backwards compat: old .pt files lack soft macro fields
