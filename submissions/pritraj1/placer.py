@@ -10,6 +10,7 @@ from macro_place.benchmark import Benchmark
 
 from ._langevin import BoltzmannPlacer
 from ._legalize import legalize_graph
+from ._repair import GreedyRepair
 
 
 def _load_plc(name):
@@ -137,18 +138,19 @@ class PritRajPlacer:
                 nets=nets,
                 canvas_width=cw,
                 canvas_height=ch,
-                gap=0.1,
+                gap=0.05,
             )
 
             global_pos = placer.optimize(
                 pos_init=pos_init,
                 movable=movable,
                 num_steps=self.langevin_steps,
-                lr=0.005,
-                density_weight=10.0,
+                lr=0.001,
+                density_weight=1.0,
                 congestion_weight=0.5,
                 temp_start=1.0,
                 temp_end=0.0001,
+                gamma=10.0,
                 callback=self._placement_callback,
             )
         else:
@@ -165,6 +167,17 @@ class PritRajPlacer:
         )
         full_legal_pos = np.copy(global_pos)
         full_legal_pos[:n_hard] = legal_pos
+
+        # Optimize score locally
+        if len(nets) > 0:
+            repairer = GreedyRepair(placer=placer, gap=0.1)
+            full_legal_pos = repairer.repair(
+                legal_pos_np=full_legal_pos,
+                movable=movable,
+                iters=3,
+                K=128,
+                search_radius=cw * 0.05,
+            )
 
         # Soft Macro Co-Optimization
         if plc is not None and not self.fast_mode:
