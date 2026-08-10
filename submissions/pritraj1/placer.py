@@ -93,20 +93,42 @@ class PritRajPlacer:
 
         n_hard = benchmark.num_hard_macros
         sizes_np = benchmark.macro_sizes[:n_hard].numpy().astype(np.float64)
+        cw = float(benchmark.canvas_width)
+        ch = float(benchmark.canvas_height)
+        movable = benchmark.get_movable_mask()[:n_hard].numpy()
+
+        # Extract netlist hypergraph topology
+        plc = _load_plc(benchmark.name)
+        nets = _extract_hypergraph_nets(benchmark, plc)
+
+        # Hard Macros
+        n_hard = benchmark.num_hard_macros
+        sizes_list = benchmark.macro_sizes[:n_hard].numpy().astype(np.float64).tolist()
+        pos_list = (
+            benchmark.macro_positions[:n_hard].numpy().astype(np.float64).tolist()
+        )
+        movable_list = benchmark.get_movable_mask()[:n_hard].numpy().tolist()
+
+        # Append Soft Macro Clusters as anchors
+        if (
+            plc is not None
+            and hasattr(plc, "soft_macro_indices")
+            and not self.fast_mode
+        ):
+            for module_idx in plc.soft_macro_indices:
+                module = plc.modules_w_pins[module_idx]
+
+                # Soft macros are used as fixed points of attraction in diffusion
+                sizes_list.append([module.get_width(), module.get_height()])
+                pos_list.append(module.get_pos())
+                movable_list.append(False)
+
+        sizes_np = np.array(sizes_list, dtype=np.float64)
+        pos_init = np.array(pos_list, dtype=np.float64)
+        movable = np.array(movable_list, dtype=bool)
 
         cw = float(benchmark.canvas_width)
         ch = float(benchmark.canvas_height)
-
-        movable = benchmark.get_movable_mask()[:n_hard].numpy()
-
-        # Extract netlist hypergraph topology and initial center positions
-        plc = _load_plc(benchmark.name)
-        nets = _extract_hypergraph_nets(
-            benchmark,
-            plc,
-        )
-
-        pos_init = benchmark.macro_positions[:n_hard].numpy().copy().astype(np.float64)
 
         # Smooth Energy-Based Langevin Global Placement
         if len(nets) > 0:
@@ -134,13 +156,15 @@ class PritRajPlacer:
 
         # LP + Greedy Zero-Overlap Legalizer
         legal_pos = legalize_graph(
-            pos=global_pos,
-            sizes=sizes_np,
-            movable=movable,
+            pos=global_pos[:n_hard],  # only on Hard Macros
+            sizes=sizes_np[:n_hard],
+            movable=movable[:n_hard],
             canvas_width=cw,
             canvas_height=ch,
             prefer_displacement=True,
         )
+        full_legal_pos = np.copy(global_pos)
+        full_legal_pos[:n_hard] = legal_pos
 
         # Soft Macro Co-Optimization
         if plc is not None and not self.fast_mode:
