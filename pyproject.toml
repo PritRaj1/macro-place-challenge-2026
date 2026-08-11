@@ -48,6 +48,8 @@ baselines = [
 ]
 pritraj1 = [
     "imageio>=2.35.1",
+    "ipykernel>=6.29.5",
+    "jupyter>=1.1.1",
     "numba>=0.58.1",
     "pillow>=10.4.0",
     "ruff>=0.16.2",

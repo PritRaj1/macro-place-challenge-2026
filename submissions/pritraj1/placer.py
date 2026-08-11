@@ -164,7 +164,7 @@ class PritRajPlacer:
                 abu_weight=self.abu_weight,
                 temp_start=1.0,
                 temp_end=0.0001,
-                gamma=0.01 * max(cw, ch),
+                gamma=5.0,
                 callback=self._placement_callback,
             )
         else:
