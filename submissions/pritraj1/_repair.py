@@ -6,8 +6,7 @@ from ._langevin import BoltzmannPlacer
 
 class GreedyRepair:
     def __init__(self, placer: BoltzmannPlacer, gap: float = 0.1):
-        """After legalizing, (which is ambivalent to proxy cost),
-        this greedily moves macros with accept/reject on proxy scoring"""
+        """Local legality-preserving repair; accept only if energy decreases."""
         self.placer = placer
         self.sizes = placer.sizes
         self.half_sizes = placer.half_sizes
@@ -44,6 +43,12 @@ class GreedyRepair:
         valid = ~torch.any(overlap_2d, dim=1)
         return valid
 
+    def _score(self, pos: torch.Tensor) -> torch.Tensor:
+        wl = self.placer.wirelength_score(pos)
+        dens = self.placer.density_score(pos)
+        cong = self.placer.congestion_score(pos)
+        return wl + 0.5 * dens + 0.5 * cong
+
     def repair(
         self,
         legal_pos_np: np.ndarray,
@@ -54,50 +59,41 @@ class GreedyRepair:
     ) -> np.ndarray:
         pos = torch.tensor(legal_pos_np, dtype=torch.float32, device=self.placer.device)
         movable_t = torch.tensor(movable, dtype=torch.bool, device=self.placer.device)
-
         movable_indices = torch.where(movable_t)[0]
         if len(movable_indices) == 0:
             return legal_pos_np
 
-        current_wl = self.placer.wirelength_score(pos).item()
+        current = self._score(pos).item()
+        canvas = torch.tensor([self.cw, self.ch], device=pos.device)
 
         for _ in range(iters):
-            indices = movable_indices[
-                torch.randperm(len(movable_indices))
-            ]  # Shuffle order to prevent bias
-
-            for idx in indices:
+            order = movable_indices[torch.randperm(len(movable_indices))]
+            for idx in order:
+                idx_i = int(idx.item())
+                half = self.half_sizes[idx_i]
                 noise = torch.randn((K, 2), device=pos.device) * search_radius
-                candidates = pos[idx].unsqueeze(0) + noise
-                candidates = torch.clamp(
-                    candidates,
-                    self.half_sizes[idx],
-                    torch.tensor([self.cw, self.ch], device=pos.device)
-                    - self.half_sizes[idx],
-                )  # Clamp inside canvas
+                candidates = pos[idx_i].unsqueeze(0) + noise
+                candidates = torch.max(candidates, half)
+                candidates = torch.min(candidates, canvas - half)
 
-                # Filter overlaps
-                valid_mask = self._get_valid_candidates(candidates, pos, idx)
-                valid_candidates = candidates[valid_mask]
-                if len(valid_candidates) == 0:
+                valid = self._get_valid_candidates(candidates, pos, idx_i)
+                valid_candidates = candidates[valid]
+                if valid_candidates.numel() == 0:
                     continue
 
-                # Score using placer's proxy
-                best_candidate = None
-                best_wl = current_wl
-
+                # Evaluate all valid candidates; keep best energy
+                best_cand = None
+                best_score = current
                 for cand in valid_candidates:
-                    temp_pos = pos.clone()
-                    temp_pos[idx] = cand
-                    cand_wl = self.placer.wirelength_score(temp_pos).item()
+                    temp = pos.clone()
+                    temp[idx_i] = cand
+                    s = self._score(temp).item()
+                    if s < best_score:
+                        best_score = s
+                        best_cand = cand
 
-                    if cand_wl < best_wl:
-                        best_wl = cand_wl
-                        best_candidate = cand
-
-                # Accept/reject
-                if best_candidate is not None:
-                    pos[idx] = best_candidate
-                    current_wl = best_wl
+                if best_cand is not None:
+                    pos[idx_i] = best_cand
+                    current = best_score
 
         return pos.detach().cpu().numpy().astype(np.float64)

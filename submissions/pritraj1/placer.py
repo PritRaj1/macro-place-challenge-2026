@@ -47,32 +47,38 @@ def _load_plc(name):
     return None
 
 
-def _extract_hypergraph_nets(benchmark, plc) -> list[list[int]]:
-    """Extracts lists of connected macro indices."""
+def _extract_hypergraph_nets(benchmark, plc) -> tuple[list[list[int]], list[float]]:
+    """Extracts lists of connected macro indices and their corresponding weights."""
     if plc is None:
-        return []
+        return [], []
 
     name_to_bidx = {}
-
     for bidx, idx in enumerate(plc.hard_macro_indices):
         name_to_bidx[plc.modules_w_pins[idx].get_name()] = bidx
 
+    # Build a lookup map from pin/driver name to its weight
+    pin_weights = {}
+    for mod in plc.modules_w_pins:
+        if hasattr(mod, "get_weight") and hasattr(mod, "get_name"):
+            pin_weights[mod.get_name()] = mod.get_weight()
+
     nets = []
+    net_weights = []
 
     for driver, sinks in plc.nets.items():
         macro_set = set()
 
         for pin in [driver] + sinks:
             parent = pin.split("/")[0]
-
             if parent in name_to_bidx:
                 macro_set.add(name_to_bidx[parent])
 
         # Hypernets require at least 2 distinct hard macros
         if len(macro_set) >= 2:
             nets.append(list(macro_set))
+            net_weights.append(pin_weights.get(driver, 1.0))
 
-    return nets
+    return nets, net_weights
 
 
 class PritRajPlacer:
@@ -81,10 +87,16 @@ class PritRajPlacer:
         seed: int = 42,
         langevin_steps: int = 600,
         fast_mode: bool = False,
+        abu_weight: float = 0.5,  # top-k ABU
+        grid_cols: int = 64,
+        grid_rows: int = 64,
     ):
         self.seed = seed
         self.langevin_steps = langevin_steps
         self.fast_mode = fast_mode
+        self.abu_weight = abu_weight
+        self.grid_cols = grid_cols
+        self.grid_rows = grid_rows
         self._placement_callback = None
 
     def place(self, benchmark: Benchmark) -> torch.Tensor:
@@ -100,7 +112,7 @@ class PritRajPlacer:
 
         # Extract netlist hypergraph topology
         plc = _load_plc(benchmark.name)
-        nets = _extract_hypergraph_nets(benchmark, plc)
+        nets, net_weights = _extract_hypergraph_nets(benchmark, plc)
 
         # Hard Macros
         n_hard = benchmark.num_hard_macros
@@ -136,9 +148,12 @@ class PritRajPlacer:
             placer = BoltzmannPlacer(
                 sizes=sizes_np,
                 nets=nets,
+                net_weights=net_weights,
                 canvas_width=cw,
                 canvas_height=ch,
-                gap=0.05,
+                gap=0.1,
+                grid_col=self.grid_cols,
+                grid_row=self.grid_rows,
             )
 
             global_pos = placer.optimize(
@@ -146,11 +161,10 @@ class PritRajPlacer:
                 movable=movable,
                 num_steps=self.langevin_steps,
                 lr=0.01,
-                density_weight=1.0,
-                congestion_weight=0.5,
+                abu_weight=self.abu_weight,
                 temp_start=1.0,
                 temp_end=0.0001,
-                gamma=10.0,
+                gamma=0.01 * max(cw, ch),
                 callback=self._placement_callback,
             )
         else:
@@ -174,17 +188,17 @@ class PritRajPlacer:
             full_legal_pos = repairer.repair(
                 legal_pos_np=full_legal_pos,
                 movable=movable,
-                iters=3,
+                iters=20,
                 K=128,
-                search_radius=cw * 0.05,
+                search_radius=max(cw, ch) * 0.05,
             )
 
         # Soft Macro Co-Optimization
         if plc is not None and not self.fast_mode:
             for bidx, module_idx in enumerate(plc.hard_macro_indices):
                 module = plc.modules_w_pins[module_idx]
-                new_x = legal_pos[bidx][0]
-                new_y = legal_pos[bidx][1]
+                new_x = full_legal_pos[:n_hard][bidx][0]
+                new_y = full_legal_pos[:n_hard][bidx][1]
 
                 module.set_pos(
                     new_x,

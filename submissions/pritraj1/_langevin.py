@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import torch
 
@@ -10,30 +12,18 @@ class BoltzmannPlacer:
     E(P) = Wirelength_Energy(P)
          + Density_Energy(P)
          + Congestion_Energy(P).
-
-    Attributes:
-        device (torch.device): CUDA or CPU compute device.
-        cw (float): Canvas width boundary.
-        ch (float): Canvas height boundary.
-        sizes (torch.Tensor): Tensor of shape [N, 2] containing (width, height).
-        half_sizes (torch.Tensor): Tensor of shape [N, 2] containing (w/2, h/2).
-        sigmas (torch.Tensor): Standard deviations of Gaussian [N, 2].
-        var_sum (torch.Tensor): Pairwise variance sum matrix [N, N, 2] for Gaussian.
-        net_indices (torch.Tensor): Padded tensor [M, K] mapping nets to macro node IDs.
-        net_masks (torch.Tensor): Tensor [M, K] masking padding elements in nets.
-        grid_x (torch.Tensor): Congestion grid X coordinates.
-        grid_y (torch.Tensor): Congestion grid Y coordinates.
     """
 
     def __init__(
         self,
         sizes: np.ndarray,
         nets: list[list[int]],
-        canvas_width: float,
+        net_weights: list[float],  # proxy weights
+        canvas_width: float,  # canvas boundary
         canvas_height: float,
-        gap: float = 0.1,
-        congestion_grid: tuple[int, int] = (32, 32),
-        congestion_capacity: float = 1.0,
+        grid_col: int = 10,  # proxy grid density
+        grid_row: int = 10,
+        gap: float = 0.1,  # min gap
         congestion_smoothing: float = 2.0,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
     ):
@@ -41,50 +31,24 @@ class BoltzmannPlacer:
         self.device = torch.device(device)
         self.cw = float(canvas_width)
         self.ch = float(canvas_height)
-        self.sizes = torch.tensor(
-            sizes,
-            dtype=torch.float32,
-            device=self.device,
-        )
+        self.sizes = torch.tensor(sizes, dtype=torch.float32, device=self.device)
         self.n = len(sizes)
+        self.half_sizes = self.sizes / 2.0
         self.gap = gap
 
-        self.half_sizes = self.sizes / 2.0
-        self.sigmas = (self.half_sizes + gap) / np.sqrt(2.0)
-
-        # Pairwise var sums: var_sum[i, j, dim] = sigmas[i]^2 + sigmas[j]^2
-        sigmas_sq = self.sigmas**2
-        self.var_sum = sigmas_sq.unsqueeze(1) + sigmas_sq.unsqueeze(0)
-
-        # Congestion grid
-        self.congestion_nx = congestion_grid[0]
-        self.congestion_ny = congestion_grid[1]
-        self.congestion_capacity = congestion_capacity
+        # Eval congenstion and density on grid
+        self.grid_col = grid_col
+        self.grid_row = grid_row
         self.congestion_smoothing = congestion_smoothing
 
         grid_x = (
-            torch.arange(
-                self.congestion_nx,
-                dtype=torch.float32,
-                device=self.device,
-            )
-            + 0.5
-        ) * (self.cw / self.congestion_nx)
-
+            torch.arange(self.grid_col, dtype=torch.float32, device=self.device) + 0.5
+        ) * (self.cw / self.grid_col)
         grid_y = (
-            torch.arange(
-                self.congestion_ny,
-                dtype=torch.float32,
-                device=self.device,
-            )
-            + 0.5
-        ) * (self.ch / self.congestion_ny)
-
-        self.grid_x, self.grid_y = torch.meshgrid(
-            grid_x,
-            grid_y,
-            indexing="xy",
-        )
+            torch.arange(self.grid_row, dtype=torch.float32, device=self.device) + 0.5
+        ) * (self.ch / self.grid_row)
+        self.grid_x, self.grid_y = torch.meshgrid(grid_x, grid_y, indexing="xy")
+        self.grid_area = (self.cw / self.grid_col) * (self.ch / self.grid_row)
 
         # Pad for batching
         max_net_len = max(len(net) for net in nets) if nets else 0
@@ -94,127 +58,116 @@ class BoltzmannPlacer:
         for net in nets:
             if len(net) <= 1:
                 continue
-
             pad_len = max_net_len - len(net)
             padded_nets.append(net + [0] * pad_len)
-            mask = [1.0] * len(net) + [0.0] * pad_len
-            net_masks.append(mask)
+            net_masks.append([1.0] * len(net) + [0.0] * pad_len)
 
         if padded_nets:
             self.net_indices = torch.tensor(
-                padded_nets,
-                dtype=torch.long,
-                device=self.device,
+                padded_nets, dtype=torch.long, device=self.device
             )
-
             self.net_masks = torch.tensor(
-                net_masks,
-                dtype=torch.float32,
-                device=self.device,
+                net_masks, dtype=torch.float32, device=self.device
             )
-
+            self.net_weights = torch.tensor(
+                net_weights, dtype=torch.float32, device=self.device
+            )
         else:
             self.net_indices = None
             self.net_masks = None
 
+    def _abu_score(
+        self, grid_tensor: torch.Tensor, top_percent: float = 0.1
+    ) -> torch.Tensor:
+        """Grads flow back through the top K elements."""
+        flat_grid = grid_tensor.flatten()
+        k = max(1, math.floor(flat_grid.numel() * top_percent))
+
+        if flat_grid.numel() < 10:
+            return flat_grid.mean()
+
+        top_k_vals, _ = torch.topk(flat_grid, k)
+        return top_k_vals.mean()
+
     def density_score(self, pos: torch.Tensor) -> torch.Tensor:
         """
-        Return smooth Gaussian overlap energy.
-
-        E_density = 0.5 * sum_ij exp(-0.5 * norm_distance^2)
-        Diagonal is masked so that a macro does not repel itself.
-
-        Args:
-            pos: centres [N, 2]
-
-        Returns:
-            Scalar density energy.
+        Calculates smooth grid ABU-based density, differentiable via top-k.
         """
-        diff = pos.unsqueeze(1) - pos.unsqueeze(0)
+        smoothing = self.congestion_smoothing
 
-        norm_dist_sq = (diff**2) / self.var_sum
-
-        total_dist_sq = norm_dist_sq.sum(dim=-1)
-
-        # Gaussian overlap energy
-        overlap_weight = torch.exp(-0.5 * total_dist_sq)
-
-        # Mask out self-overlap on diagonal
-        overlap = overlap_weight * (
-            1.0
-            - torch.eye(
-                self.n,
-                device=self.device,
-                dtype=pos.dtype,
-            )
+        # Macro bounding boxes
+        min_x = (
+            (pos[:, 0] - self.half_sizes[:, 0] - self.gap).unsqueeze(-1).unsqueeze(-1)
+        )
+        max_x = (
+            (pos[:, 0] + self.half_sizes[:, 0] + self.gap).unsqueeze(-1).unsqueeze(-1)
+        )
+        min_y = (
+            (pos[:, 1] - self.half_sizes[:, 1] - self.gap).unsqueeze(-1).unsqueeze(-1)
+        )
+        max_y = (
+            (pos[:, 1] + self.half_sizes[:, 1] + self.gap).unsqueeze(-1).unsqueeze(-1)
         )
 
-        # Each pair appears twice: (i, j) and (j, i)
-        return 0.5 * overlap.sum()
+        gx = self.grid_x.unsqueeze(0)
+        gy = self.grid_y.unsqueeze(0)
 
-    def wirelength_score(
-        self,
-        pos: torch.Tensor,
-        gamma: float = 2.0,
-    ) -> torch.Tensor:
+        # Smooth inclusion masking
+        inside_x = torch.sigmoid((gx - min_x) / smoothing) * torch.sigmoid(
+            (max_x - gx) / smoothing
+        )
+        inside_y = torch.sigmoid((gy - min_y) / smoothing) * torch.sigmoid(
+            (max_y - gy) / smoothing
+        )
+
+        # Area footprint per macro per grid cell
+        macro_footprint = inside_x * inside_y
+        grid_density = macro_footprint.sum(dim=0) / self.grid_area
+
+        # Proxy evaluates Top 10%, halved
+        e_density = self._abu_score(grid_density, 0.1) * 0.5
+        return e_density
+
+    def wirelength_score(self, pos: torch.Tensor, gamma: float = 2.0) -> torch.Tensor:
         """
         Return score of weighted-avg wirelength
 
         Smooths bounding-box HPWL = (max(X) - min(X)) using ePlace / DREAMPlace method.
         """
-        e_wl = torch.tensor(
-            0.0,
-            device=self.device,
+        if self.net_indices is None:
+            return torch.tensor(0.0, device=self.device)
+
+        net_coords = pos[self.net_indices]
+
+        # WA Max Boundary
+        max_coords = torch.where(
+            self.net_masks.unsqueeze(-1) > 0,
+            net_coords,
+            torch.full_like(net_coords, -1e9),
         )
+        shift_max = max_coords.max(dim=1, keepdim=True).values.detach()
+        exp_pos = torch.exp(
+            (net_coords - shift_max) / gamma
+        ) * self.net_masks.unsqueeze(-1)
+        wa_max = (net_coords * exp_pos).sum(dim=1) / (exp_pos.sum(dim=1) + 1e-8)
 
-        if self.net_indices is not None:
-            net_coords = pos[self.net_indices]
+        # WA Min Boundary
+        min_coords = torch.where(
+            self.net_masks.unsqueeze(-1) > 0,
+            -net_coords,
+            torch.full_like(net_coords, -1e9),
+        )
+        shift_min = min_coords.max(dim=1, keepdim=True).values.detach()
+        exp_neg = torch.exp(
+            (-net_coords - shift_min) / gamma
+        ) * self.net_masks.unsqueeze(-1)
+        wa_min = (net_coords * exp_neg).sum(dim=1) / (exp_neg.sum(dim=1) + 1e-8)
 
-            # WA Max Boundary
-            max_coords = torch.where(
-                self.net_masks.unsqueeze(-1) > 0,
-                net_coords,
-                torch.full_like(
-                    net_coords,
-                    -1e9,  # Invalid padded receive -ve inf.
-                ),
-            )
-
-            shift_max = max_coords.max(
-                dim=1,
-                keepdim=True,
-            ).values.detach()
-
-            exp_pos = torch.exp(
-                (net_coords - shift_max) / gamma
-            ) * self.net_masks.unsqueeze(-1)
-            wa_max = (net_coords * exp_pos).sum(dim=1) / (exp_pos.sum(dim=1) + 1e-8)
-
-            # WA Min Boundary
-            min_coords = torch.where(
-                self.net_masks.unsqueeze(-1) > 0,
-                -net_coords,
-                torch.full_like(
-                    net_coords,
-                    -1e9,  # Invalid padded receive -ve inf.
-                ),
-            )
-
-            shift_min = min_coords.max(
-                dim=1,
-                keepdim=True,
-            ).values.detach()
-
-            exp_neg = torch.exp(
-                (-net_coords - shift_min) / gamma
-            ) * self.net_masks.unsqueeze(-1)
-
-            wa_min = (net_coords * exp_neg).sum(dim=1) / (exp_neg.sum(dim=1) + 1e-8)
-
-            # Total HPWL = sum(Max - Min) across all nets and dims
-            e_wl = (wa_max - wa_min).sum()
-
-        return e_wl
+        # Mul by Proxy Net Weights
+        hpwl_per_net_per_dim = wa_max - wa_min
+        hpwl_per_net = hpwl_per_net_per_dim.sum(dim=-1)  # Sum X and Y
+        weighted_hpwl = hpwl_per_net * self.net_weights
+        return weighted_hpwl.sum()
 
     def congestion_score(
         self,
@@ -232,71 +185,30 @@ class BoltzmannPlacer:
             Scalar congestion energy.
         """
         if self.net_indices is None:
-            return torch.tensor(
-                0.0,
-                dtype=pos.dtype,
-                device=self.device,
-            )
+            return torch.tensor(0.0, dtype=pos.dtype, device=self.device)
 
         net_coords = pos[self.net_indices]
+        valid_mask = self.net_masks > 0
 
         # Smooth net bounding-box boundaries.
-        valid_mask = self.net_masks > 0
         masked_x = torch.where(
-            valid_mask,
-            net_coords[:, :, 0],
-            torch.full_like(
-                net_coords[:, :, 0],
-                -1e9,
-            ),
+            valid_mask, net_coords[:, :, 0], torch.full_like(net_coords[:, :, 0], -1e9)
         )
-
         masked_neg_x = torch.where(
-            valid_mask,
-            -net_coords[:, :, 0],
-            torch.full_like(
-                net_coords[:, :, 0],
-                -1e9,
-            ),
+            valid_mask, net_coords[:, :, 0], torch.full_like(net_coords[:, :, 0], -1e9)
         )
-
         masked_y = torch.where(
-            valid_mask,
-            net_coords[:, :, 1],
-            torch.full_like(
-                net_coords[:, :, 1],
-                -1e9,
-            ),
+            valid_mask, net_coords[:, :, 1], torch.full_like(net_coords[:, :, 1], -1e9)
         )
-
         masked_neg_y = torch.where(
-            valid_mask,
-            -net_coords[:, :, 1],
-            torch.full_like(
-                net_coords[:, :, 1],
-                -1e9,
-            ),
+            valid_mask, -net_coords[:, :, 1], torch.full_like(net_coords[:, :, 1], -1e9)
         )
 
         smoothing = self.congestion_smoothing
-
-        max_x = smoothing * torch.logsumexp(
-            masked_x / smoothing,
-            dim=1,
-        )
-        min_x = -smoothing * torch.logsumexp(
-            masked_neg_x / smoothing,
-            dim=1,
-        )
-
-        max_y = smoothing * torch.logsumexp(
-            masked_y / smoothing,
-            dim=1,
-        )
-        min_y = -smoothing * torch.logsumexp(
-            masked_neg_y / smoothing,
-            dim=1,
-        )
+        max_x = smoothing * torch.logsumexp(masked_x / smoothing, dim=1)
+        min_x = -smoothing * torch.logsumexp(masked_neg_x / smoothing, dim=1)
+        max_y = smoothing * torch.logsumexp(masked_y / smoothing, dim=1)
+        min_y = -smoothing * torch.logsumexp(masked_neg_y / smoothing, dim=1)
 
         # Grid segment receives demand when inside the bounding box of a net.
         gx = self.grid_x.unsqueeze(0)
@@ -309,17 +221,14 @@ class BoltzmannPlacer:
         inside_x = torch.sigmoid((gx - min_x) / smoothing) * torch.sigmoid(
             (max_x - gx) / smoothing
         )
-
         inside_y = torch.sigmoid((gy - min_y) / smoothing) * torch.sigmoid(
             (max_y - gy) / smoothing
         )
-
         net_demand = inside_x * inside_y
-        congestion = net_demand.sum(dim=0)
+        congestion_grid = net_demand.sum(dim=0)
 
-        # Penalize only regions whose demand exceeds capacity.
-        overflow = torch.relu(congestion - self.congestion_capacity)
-        e_congestion = overflow.square().mean()
+        # Proxy evaluates Top 5%
+        e_congestion = self._abu_score(congestion_grid, 0.05)
         return e_congestion
 
     def optimize(
@@ -328,8 +237,7 @@ class BoltzmannPlacer:
         movable: np.ndarray,
         num_steps: int = 500,
         lr: float = 0.05,
-        density_weight: float = 10.0,
-        congestion_weight: float = 1.0,
+        abu_weight: float = 1.0,
         temp_start: float = 1.0,
         temp_end: float = 0.001,
         gamma: float = 2.0,
@@ -337,19 +245,12 @@ class BoltzmannPlacer:
     ) -> np.ndarray:
         """Stochastic Langevin optimization.
 
-        P_{t+1} = P_t - lr * grad(E) + sqrt(2 * lr * T_t) * Noise
-
-        This is ULA using the Boltzmann score:
-            score(P) = grad log p(P) = -grad(E) / T
-        with score-step-size epsilon = lr * T.
-
         Args:
             pos_init: [N, 2] initial macro centers.
             movable: Boolean array of shape [N]; False indicates fixed/pinned macros.
             num_steps: Total sampling time steps.
             lr: Step size multiplying the energy gradient.
-            density_weight: Scaling weight balancing overlap energy vs wirelength energy.
-            congestion_weight: Scaling weight balancing routing congestion energy.
+            abu_weight: Scaling weight balancing ABU overflow penalty vs wirelength energy.
             temp_start: Initial thermal noise scale (high exploration / tunneling).
             temp_end: Final thermal noise scale (pure grad descent).
             gamma: Smoothing parameter for weighted-average wirelength.
@@ -384,10 +285,7 @@ class BoltzmannPlacer:
         fixed_pos = pos.clone()
 
         for step in range(num_steps):
-            decay = step / max(
-                num_steps - 1,
-                1,
-            )  # temp annealing.
+            decay = step / max(num_steps - 1, 1)  # temp annealing.
 
             if temp_start == 0.0 or temp_end == 0.0 and step == num_steps - 1:
                 T_t = 0.0
@@ -395,32 +293,19 @@ class BoltzmannPlacer:
                 T_t = temp_start * (temp_end / temp_start) ** decay
 
             pos_req = pos.detach().requires_grad_(True)
-            e_density = self.density_score(pos_req)
-            e_wl = self.wirelength_score(
-                pos_req,
-                gamma=gamma,
-            )
-            e_congestion = self.congestion_score(pos_req)
+            e_wl = self.wirelength_score(pos_req, gamma=gamma)
+            e_den = self.density_score(pos_req)
+            e_cong = self.congestion_score(pos_req)
+            total_energy = e_wl + abu_weight * e_den + abu_weight * e_cong
 
-            total_energy = (
-                e_wl + density_weight * e_density + congestion_weight * e_congestion
-            )
-
-            grad = torch.autograd.grad(
-                total_energy,
-                pos_req,
-            )[0]
+            grad = torch.autograd.grad(total_energy, pos_req)[0]
 
             noise = torch.randn_like(pos_req)
             update = -lr * grad + np.sqrt(2.0 * lr * T_t) * noise
             candidate = pos_req.detach() + update
 
             # Clamp only movable macros.
-            candidate = torch.clamp(
-                candidate,
-                low,
-                high,
-            )
+            candidate = torch.clamp(candidate, low, high)
             pos = torch.where(
                 movable_mask,
                 candidate,
@@ -428,10 +313,6 @@ class BoltzmannPlacer:
             )
 
             if callback is not None:
-                callback(
-                    step,
-                    pos.detach().cpu().numpy(),
-                    total_energy.detach().item(),
-                )
+                callback(step, pos.detach().cpu().numpy(), total_energy.detach().item())
 
         return pos.detach().cpu().numpy().astype(np.float64)

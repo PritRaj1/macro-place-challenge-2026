@@ -160,7 +160,7 @@ def main():
             "type": "pritraj",
             "import_path": "submissions.pritraj1.placer",
             "class_name": "PritRajPlacer",
-            "kwargs": {"seed": 42, "langevin_steps": 1000, "fast_mode": False},
+            "kwargs": {"seed": 42, "langevin_steps": 1000, "fast_mode": True},
             "output_gif": "gifs/pritraj_ibm01.gif",
             "output_png": "gifs/pritraj_ibm01.png",
             "fps": 1,
