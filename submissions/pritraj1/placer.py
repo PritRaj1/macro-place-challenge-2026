@@ -145,7 +145,7 @@ class PritRajPlacer:
                 pos_init=pos_init,
                 movable=movable,
                 num_steps=self.langevin_steps,
-                lr=0.001,
+                lr=0.01,
                 density_weight=1.0,
                 congestion_weight=0.5,
                 temp_start=1.0,
